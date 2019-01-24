@@ -1,0 +1,2 @@
+#! /bin/bash
+docker run -v $PWD:/root/workspace -v /media/sf_Dataset:/root/workspace/Dataset -w /root/workspace -it pedrosc/mask-rcnn

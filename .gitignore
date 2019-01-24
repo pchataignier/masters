@@ -1,0 +1,12 @@
+# Data files and directories common in repo root
+Dataset/
+logs/
+*.h5
+results/
+temp/
+test/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
