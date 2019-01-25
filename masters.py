@@ -26,6 +26,7 @@ CLASSES = ["Telefone", "Caneca", "Controle Remoto", "Garrafa", "Mão"]
 
 ROOT_DIR = os.getcwd() # Root directory of the project
 DEFAULT_LOGS_DIR = os.path.join(ROOT_DIR, "logs") # Default directory to save logs and model checkpoints
+DEFAULT_CONFIGS_DIR = os.path.join(ROOT_DIR, "configs") # Default directory to configuration files
 
 ############################################################
 #  Configurations
@@ -33,20 +34,31 @@ DEFAULT_LOGS_DIR = os.path.join(ROOT_DIR, "logs") # Default directory to save lo
 
 class MastersConfig(Config):
     """Configuration for training on custom Dataset.
-    Derives from the base Config class and overrides values specific dataset."""
+    Derives from the base Config class and overrides values for specific dataset."""
     
     # Give the configuration a recognizable name
     NAME = MODEL_NAME
 
-    # We use a GPU with 12GB memory, which can fit two images.
-    # Adjust down if you use a smaller GPU.
-    #IMAGES_PER_GPU = 2
-
-    # Uncomment to train on 8 GPUs (default is 1)
-    # GPU_COUNT = 8
-
     # Number of classes (including background)
     NUM_CLASSES = 1 + len(CLASSES)
+
+    # Number of images to train with on each GPU. A 12GB GPU can typically
+    # handle 2 images of 1024x1024px.
+    # Adjust based on your GPU memory and image sizes. Use the highest
+    # number that your GPU can handle for best performance.
+    # !! Set 'IMAGES_PER_GPU' property on config file
+
+    # NUMBER OF GPUs to use. For CPU training, use 1
+    # !! Set 'GPU_COUNT' property on config file
+
+    def __init__(self, configFile = None):
+        super().__init__()
+
+        if configFile:
+            configs = json.load(open(configFile))
+
+            for atrib in configs:
+                setattr(self, atrib, configs[atrib])
 
 ############################################################
 #  Dataset
@@ -116,7 +128,8 @@ class MastersDataset(utils.Dataset):
             return super(MastersDataset, self).load_mask(image_id)
     
     # Auxiliary function for 'load_mask'
-    def polygon_to_mask(self, polygon, width, height):
+    @staticmethod
+    def polygon_to_mask(polygon, width, height):
         # polygon = [(x1,y1),(x2,y2),...] or [x1,y1,x2,y2,...]
     
         img = Image.new('L', (width, height), 0)
@@ -142,7 +155,7 @@ if __name__ == '__main__':
     import argparse
     import logging
     
-    def getParser():
+    def GetParser():
         parser = argparse.ArgumentParser(
             description='Train Mask R-CNN on custom dataset.')
         parser.add_argument("mode",
@@ -151,17 +164,22 @@ if __name__ == '__main__':
         parser.add_argument('-D', '--dataset', required=True,
                             metavar="/path/to/annotations/filename",
                             help='Path to VIA annotation file. Must be on the same directory as images')
-        parser.add_argument('-m', '--model', required=True,
+        parser.add_argument('-m', '--model', required=False,
                             metavar="/path/to/weights.h5",
-                            help="Path to weights .h5 file, or 'coco', or 'imagenet', or 'last'")
+                            help="Path to weights .h5 file, or 'coco', or 'imagenet' (default), or 'last'",
+                            default='imagenet')
+        parser.add_argument('-c', '--config', required=False,
+                            metavar="/path/to/config.json",
+                            help="Path to configuration .json file",
+                            default=None)
         parser.add_argument('--logs', required=False,
                             default=DEFAULT_LOGS_DIR,
                             metavar="/path/to/logs/",
                             help='Logs and checkpoints directory (default=logs/)')
         parser.add_argument('-l', '--limit', required=False,
-                            default=500, type=int,
+                            default=200, type=int,
                             metavar="<image count>",
-                            help='Images to use for evaluation (default=500)')
+                            help='Images to use for evaluation (default=200)')
         parser.add_argument('--docker',
                             help='Use this if running on the \'pedrosc/mask-rcnn\' docker to use the pre-downloaded models',
                             action="store_true")
@@ -170,16 +188,16 @@ if __name__ == '__main__':
         group.add_argument('-d', '--debug', required=False,
                             help="Print lots of debugging statements",
                             action="store_const", dest="loglevel",
-                            const=logging.DEBUG)#, default=logging.WARNING)
+                            const=logging.DEBUG)
         group.add_argument('-v', '--verbose', required=False,
                             help="Be verbose",
                             action="store_const", dest="loglevel", const=logging.INFO)
         parser.set_defaults(loglevel=logging.WARNING)
         return parser
     
-    def GetConfig(mode):
+    def GetConfig(mode, configFile=None):
         if mode == "train":
-            return MastersConfig()
+            return MastersConfig(configFile)
         else:
             class InferenceConfig(MastersConfig):
                 # Set batch size to 1 since we'll be running inference on
@@ -200,7 +218,7 @@ if __name__ == '__main__':
         # Select weights file to load
         if args.model.lower() == "last": # Find last trained weights
             model_path = model.find_last()[1]
-        elif(args.docker):
+        elif args.docker:
             import dockerUtils
             model_path = dockerUtils.GetModelPath(args.model)
         else:
@@ -269,8 +287,8 @@ if __name__ == '__main__':
 #####################
 
     # Parse command line arguments
-    args = getParser().parse_args()
-    logging.basicConfig(level=args.loglevel, format='%(asctime)s - %(message)s')
+    args = GetParser().parse_args()
+    logging.basicConfig(level=args.loglevel, format='%(asctime)s - %(levelname)s: %(message)s')
     
     logging.info("Mode: %s", args.mode)
     logging.info("Model: %s", args.model)
@@ -289,10 +307,10 @@ if __name__ == '__main__':
     model = GetModel(args)
     logging.debug("Model created")
     
-    if(args.mode == "train"):
+    if args.mode == "train":
         (dataset_train, dataset_val) = LoadDatasets(args.dataset, args.dataset)
         TrainModel(model, config, dataset_train, dataset_val)
-    elif(args.mode == "evaluate"):
+    elif args.mode == "evaluate":
         #TODO
         logging.warning("Not implemented yet")
     else:
