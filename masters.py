@@ -16,6 +16,7 @@ import os
 import numpy as np
 import imgaug
 import json
+import random
 from mrcnn.config import Config
 from mrcnn import model as modellib, utils
 from PIL import Image, ImageDraw
@@ -65,14 +66,57 @@ class MastersConfig(Config):
 ############################################################
 
 class MastersDataset(utils.Dataset):
-    # New loading method.
-    def load_masters(self, annotations_filepath):
-        dataset_dir = os.path.dirname(annotations_filepath)
-        
+    def __init__(self):
         # Add classes
         for i in range(len(CLASSES)):
             self.add_class(MODEL_NAME, i + 1, CLASSES[i])
-        
+
+    @staticmethod
+    def auto_split_validation(dataset_filepath, val_percent): #TODO: Checar val_percent > 100 e > 1
+        dataset_dir = os.path.dirname(dataset_filepath)
+
+        dataset = json.load(open(dataset_filepath))
+        images = random.shuffle(list(dataset))
+        split_point = round((1-val_percent)*len(images))
+        if split_point < 1:
+            split_point = 1
+
+        train_imgs = images[:split_point]
+        training_dataset = MastersDataset()
+        i=0
+        for img in train_imgs:
+            a=dataset[img]
+            training_dataset.add_image(
+                MODEL_NAME, image_id=i,  # TODO: id diferente? Talvez a própria chave 'img'
+                path=os.path.join(dataset_dir, a['filename']),
+                width=a['file_attributes']['Width'],
+                height=a['file_attributes']['Height'],
+                annotations=a)
+            i += 1
+
+        training_dataset.prepare()
+
+        val_imgs = images[split_point:]
+        validation_dataset = MastersDataset()
+        i = 0
+        for img in val_imgs:
+            a = dataset[img]
+            validation_dataset.add_image(
+                MODEL_NAME, image_id=i,  # TODO: id diferente?
+                path=os.path.join(dataset_dir, a['filename']),
+                width=a['file_attributes']['Width'],
+                height=a['file_attributes']['Height'],
+                annotations=a)
+            i += 1
+
+        validation_dataset.prepare()
+
+        return training_dataset, validation_dataset
+
+    # New loading method.
+    def load_masters(self, annotations_filepath):
+        dataset_dir = os.path.dirname(annotations_filepath)
+
         # Add images
         annotations = json.load(open(annotations_filepath))
         i = 0
@@ -164,6 +208,9 @@ if __name__ == '__main__':
         parser.add_argument('-D', '--dataset', required=True,
                             metavar="/path/to/annotations/filename",
                             help='Path to VIA annotation file. Must be on the same directory as images')
+        parser.add_argument('-V', '--val', required=False,
+                            default=0.2, type=float,
+                            help='Percentage of dataset to use for evaluation (default=0.2)')
         parser.add_argument('-m', '--model', required=False,
                             metavar="/path/to/weights.h5",
                             help="Path to weights .h5 file, or 'coco', or 'imagenet' (default), or 'last'",
@@ -176,10 +223,6 @@ if __name__ == '__main__':
                             default=DEFAULT_LOGS_DIR,
                             metavar="/path/to/logs/",
                             help='Logs and checkpoints directory (default=logs/)')
-        parser.add_argument('-l', '--limit', required=False,
-                            default=200, type=int,
-                            metavar="<image count>",
-                            help='Images to use for evaluation (default=200)')
         parser.add_argument('--docker',
                             help='Use this if running on the \'pedrosc/mask-rcnn\' docker to use the pre-downloaded models',
                             action="store_true")
@@ -255,7 +298,8 @@ if __name__ == '__main__':
         # Image Augmentation
         # Right/Left flip 50% of the time
         augmentation = imgaug.augmenters.Fliplr(0.5)
-        
+
+        # TODO: Ler cronograma de treinamento de um arquivo? Ou colocar em Config?
         # Training - Stage 1
         logging.info("Training network heads")
         model.train(dataset_train, dataset_val,
@@ -293,8 +337,8 @@ if __name__ == '__main__':
     logging.info("Mode: %s", args.mode)
     logging.info("Model: %s", args.model)
     logging.info("Dataset: %s", args.dataset)
+    logging.info("Eval Percent: %s", args.val)
     logging.info("Logs: %s", args.logs)
-    logging.info("Eval Limit: %s", args.limit)
     
     # Configurations
     logging.debug("Creating Config")
@@ -308,7 +352,7 @@ if __name__ == '__main__':
     logging.debug("Model created")
     
     if args.mode == "train":
-        (dataset_train, dataset_val) = LoadDatasets(args.dataset, args.dataset)
+        (dataset_train, dataset_val) = MastersDataset.auto_split_validation(args.dataset, args.val)
         TrainModel(model, config, dataset_train, dataset_val)
     elif args.mode == "evaluate":
         #TODO
