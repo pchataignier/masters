@@ -275,7 +275,13 @@ if __name__ == '__main__':
     
         # Load weights
         logging.info("Loading weights from %s", model_path)
-        model.load_weights(model_path, by_name=True)
+        if args.weights.lower() == "coco":
+            # Exclude the last layers because they require a matching number of classes
+            model.load_weights(weights_path, by_name=True, exclude=[
+                "mrcnn_class_logits", "mrcnn_bbox_fc",
+                "mrcnn_bbox", "mrcnn_mask"])
+        else:
+            model.load_weights(weights_path, by_name=True)
         
         return model
 
