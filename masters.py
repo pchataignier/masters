@@ -75,6 +75,7 @@ class InferenceConfig(MastersConfig):
 
 class MastersDataset(utils.Dataset):
     def __init__(self):
+        super().__init__()
         # Add classes
         for i in range(len(CLASSES)):
             self.add_class(MODEL_NAME, i + 1, CLASSES[i])
@@ -83,8 +84,12 @@ class MastersDataset(utils.Dataset):
     def auto_split_validation(dataset_filepath, val_percent): #TODO: Checar val_percent > 100 e > 1
         dataset_dir = os.path.dirname(dataset_filepath)
 
-        dataset = json.load(open(dataset_filepath))
-        images = random.shuffle(list(dataset))
+        with open(os.path.normpath(dataset_filepath)) as file:
+            dataset = json.load(file)
+
+        images = list(dataset)
+        random.shuffle(images)
+
         split_point = round((1-val_percent)*len(images))
         if split_point < 1:
             split_point = 1
