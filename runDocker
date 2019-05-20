@@ -1,2 +1,2 @@
 #! /bin/bash
-docker run -v $PWD:/root/workspace -v /media/sf_Dataset:/root/workspace/Dataset -w /root/workspace -it pedrosc/mask-rcnn
+docker run -p 127.0.1.1:50007:50007 -v $PWD:/root/workspace -v /media/sf_Dataset:/root/workspace/Dataset -w /root/workspace -it pedrosc/mask-rcnn

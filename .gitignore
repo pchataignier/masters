@@ -4,8 +4,11 @@ logs/
 configs/
 *.h5
 results/
+Movidius/
+TF_Model/
 temp/
 test/
+test*
 quickTrain
 
 # Byte-compiled / optimized / DLL files
