@@ -12,7 +12,6 @@ Base de Telefone(?)
 @author: Pedro Schuback Chataignier
 """
 import os
-#import time
 import numpy as np
 import imgaug
 import json
@@ -61,6 +60,15 @@ class MastersConfig(Config):
             for atrib in configs:
                 setattr(self, atrib, configs[atrib])
 
+class InferenceConfig(MastersConfig):
+    # Set batch size to 1 since we'll be running inference on
+    # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
+    def __init__(self, configFile = None):
+        super().__init__(configFile)
+        self.GPU_COUNT = 1
+        self.IMAGES_PER_GPU = 1
+        self.DETECTION_MIN_CONFIDENCE = 0
+
 ############################################################
 #  Dataset
 ############################################################
@@ -86,9 +94,14 @@ class MastersDataset(utils.Dataset):
         i=0
         for img in train_imgs:
             a=dataset[img]
+
+            rel_path = a['relativePath'].replace("\\","/")
+            imgPath = os.path.join(dataset_dir, rel_path)
+            imgPath = os.path.normpath(imgPath)
+
             training_dataset.add_image(
                 MODEL_NAME, image_id=i,  # TODO: id diferente? Talvez a própria chave 'img'
-                path=os.path.join(dataset_dir, a['filename']),
+                path=imgPath,
                 width=a['file_attributes']['Width'],
                 height=a['file_attributes']['Height'],
                 annotations=a)
@@ -101,9 +114,14 @@ class MastersDataset(utils.Dataset):
         i = 0
         for img in val_imgs:
             a = dataset[img]
+
+            rel_path = a['relativePath'].replace("\\", "/")
+            imgPath = os.path.join(dataset_dir, rel_path)
+            imgPath = os.path.normpath(imgPath)
+
             validation_dataset.add_image(
                 MODEL_NAME, image_id=i,  # TODO: id diferente?
-                path=os.path.join(dataset_dir, a['filename']),
+                path=imgPath,
                 width=a['file_attributes']['Width'],
                 height=a['file_attributes']['Height'],
                 annotations=a)
@@ -114,7 +132,7 @@ class MastersDataset(utils.Dataset):
         return training_dataset, validation_dataset
 
     # New loading method.
-    def load_masters(self, annotations_filepath):
+    def load_masters(self, annotations_filepath): #TODO: remover ou alterar
         dataset_dir = os.path.dirname(annotations_filepath)
 
         # Add images
@@ -191,7 +209,65 @@ class MastersDataset(utils.Dataset):
         else:
             super(MastersDataset, self).image_reference(image_id)
 
+############################################################
+# Auxiliary Functions and Classes
+############################################################
 
+class EvaluationData:
+    def __init__(self, img_id, data):
+        self.img_id = img_id
+        self.data = data
+
+def GetConfig(mode, configFile=None):
+    if mode == "train":
+        return MastersConfig(configFile)
+    else:
+        return InferenceConfig(configFile)
+
+def GetModel(mode, weights_path, logs_path, docker=False):
+    if mode == "train":
+        model = modellib.MaskRCNN(mode="training", config=config,
+                                  model_dir=logs_path)
+    else:
+        model = modellib.MaskRCNN(mode="inference", config=config,
+                                  model_dir=logs_path)
+
+    # Select weights file to load
+    if weights_path.lower() == "last":  # Find last trained weights
+        model_path = model.find_last()[1]
+    elif docker:
+        import dockerUtils
+        model_path = dockerUtils.GetModelPath(weights_path)
+    elif weights_path.lower() == "imagenet":
+        # Start from ImageNet trained weights
+        model_path = model.get_imagenet_weights()
+        # if weights_path.lower() == "coco":
+        #    model_path = COCO_MODEL_PATH
+
+    else:
+        model_path = weights_path
+
+    # Load weights
+    if __name__ == '__main__':
+        logging.info("Loading weights from %s", model_path)
+
+    if weights_path.lower() == "coco":
+        # Exclude the last layers because they require a matching number of classes
+        model.load_weights(model_path, by_name=True, exclude=[
+            "mrcnn_class_logits", "mrcnn_bbox_fc",
+            "mrcnn_bbox", "mrcnn_mask"])
+    else:
+        model.load_weights(model_path, by_name=True)
+
+    return model
+
+def zip_results(result):
+    new_results =[]
+    for i in range(0,len(result["class_ids"])):
+        res = {"class_id": result["class_ids"][i], "mask": result["masks"][i], "roi": result["rois"][i], "score": result["scores"][i]}
+        #ROI - y1, x1, y2, x2
+        new_results.append(res)
+    return new_results
 ############################################################
 # Execution
 ############################################################
@@ -204,8 +280,8 @@ if __name__ == '__main__':
             description='Train Mask R-CNN on custom dataset.')
         parser.add_argument("mode",
                             metavar="<command>",
-                            help="'train' or 'evaluate'")
-        parser.add_argument('-D', '--dataset', required=True,
+                            help="'train' or 'server'")
+        parser.add_argument('-D', '--dataset', required=False,
                             metavar="/path/to/annotations/filename",
                             help='Path to VIA annotation file. Must be on the same directory as images')
         parser.add_argument('-V', '--val', required=False,
@@ -226,6 +302,8 @@ if __name__ == '__main__':
         parser.add_argument('--docker',
                             help='Use this if running on the \'pedrosc/mask-rcnn\' docker to use the pre-downloaded models',
                             action="store_true")
+        parser.add_argument('-p','--port', required=False,
+                            help='Port to listen to when in server mode')
         
         group = parser.add_mutually_exclusive_group()
         group.add_argument('-d', '--debug', required=False,
@@ -237,55 +315,9 @@ if __name__ == '__main__':
                             action="store_const", dest="loglevel", const=logging.INFO)
         parser.set_defaults(loglevel=logging.WARNING)
         return parser
-    
-    def GetConfig(mode, configFile=None):
-        if mode == "train":
-            return MastersConfig(configFile)
-        else:
-            class InferenceConfig(MastersConfig):
-                # Set batch size to 1 since we'll be running inference on
-                # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
-                GPU_COUNT = 1
-                IMAGES_PER_GPU = 1
-                DETECTION_MIN_CONFIDENCE = 0
-            return InferenceConfig()
-        
-    def GetModel(args):
-        if args.mode == "train":
-            model = modellib.MaskRCNN(mode="training", config=config,
-                                      model_dir=args.logs)
-        else:
-            model = modellib.MaskRCNN(mode="inference", config=config,
-                                      model_dir=args.logs)
-            
-        # Select weights file to load
-        if args.model.lower() == "last": # Find last trained weights
-            model_path = model.find_last()[1]
-        elif args.docker:
-            import dockerUtils
-            model_path = dockerUtils.GetModelPath(args.model)
-        else:
-            #if args.model.lower() == "coco":
-            #    model_path = COCO_MODEL_PATH
-            if args.model.lower() == "imagenet":
-                # Start from ImageNet trained weights
-                model_path = model.get_imagenet_weights()
-            else:
-                model_path = args.model
-    
-        # Load weights
-        logging.info("Loading weights from %s", model_path)
-        if args.weights.lower() == "coco":
-            # Exclude the last layers because they require a matching number of classes
-            model.load_weights(weights_path, by_name=True, exclude=[
-                "mrcnn_class_logits", "mrcnn_bbox_fc",
-                "mrcnn_bbox", "mrcnn_mask"])
-        else:
-            model.load_weights(weights_path, by_name=True)
-        
-        return model
 
-    def LoadDatasets(train_data, val_data):
+
+    def LoadDatasets(train_data, val_data): # TODO: Remover
         # Training dataset
         logging.info("Loading Training Dataset")
         dataset_train = MastersDataset()
@@ -339,11 +371,19 @@ if __name__ == '__main__':
     # Parse command line arguments
     args = GetParser().parse_args()
     logging.basicConfig(level=args.loglevel, format='%(asctime)s - %(levelname)s: %(message)s')
-    
+
+    if args.mode == 'train':
+        assert args.dataset
+    if args.mode == 'server':
+        assert args.port
+
     logging.info("Mode: %s", args.mode)
     logging.info("Model: %s", args.model)
-    logging.info("Dataset: %s", args.dataset)
-    logging.info("Eval Percent: %s", args.val)
+    if args.mode == 'train':
+        logging.info("Dataset: %s", args.dataset)
+        logging.info("Eval Percent: %s", args.val)
+    if args.mode == 'server':
+        logging.info("Listening to Port: %s", args.port)
     logging.info("Logs: %s", args.logs)
     
     # Configurations
@@ -354,17 +394,50 @@ if __name__ == '__main__':
     
     # Create model
     logging.debug("Creating Model")
-    model = GetModel(args)
+    model = GetModel(args.mode, args.model, args.logs, args.docker)
     logging.debug("Model created")
     
     if args.mode == "train":
         (dataset_train, dataset_val) = MastersDataset.auto_split_validation(args.dataset, args.val)
         TrainModel(model, config, dataset_train, dataset_val)
-    elif args.mode == "evaluate":
+    elif args.mode == "server":
         #TODO
-        logging.warning("Not implemented yet")
+        #logging.warning("Not implemented yet")
+        import socket, pickle#, time
+
+        HOST = socket.gethostbyname(socket.gethostname()) # Host IP
+        PORT = args.port  # 50007 Arbitrary non-privileged port
+        logging.info('Host:Port - %s:%s', HOST, PORT)
+
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind((HOST, PORT))
+
+        logging.info('Bound and Listening...')
+        s.listen(1)
+        while True:
+            conn, addr = s.accept()
+            logging.info('Connected by %s', addr)
+
+            while True:
+                data = conn.recv(2^13)
+                if not data: break
+                eval_data = pickle.loads(data)
+                logging.debug('Received Package: %s', eval_data.img_id)
+
+                logging.info('Running Detection...')
+                results = model.detect(list(eval_data.data))
+                results = zip_results(results[0])
+
+                logging.info('Building Response...')
+                response = EvaluationData(eval_data.img_id, results)
+                data = pickle.dumps(response)
+                logging.info('Sending Results')
+                conn.send(data)
+
+            conn.close()
+
     else:
-        logging.error("'%s' is not recognized. Use 'train' or 'evaluate'", args.mode)
+        logging.error("'%s' is not recognized. Use 'train' or 'server'", args.mode)
     
     
     
