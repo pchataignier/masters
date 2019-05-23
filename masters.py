@@ -96,8 +96,8 @@ class MastersDataset(utils.Dataset):
 
         train_imgs = images[:split_point]
         training_dataset = MastersDataset()
-        i=0
-        for img in train_imgs:
+
+        for i, img in enumerate(train_imgs):
             a=dataset[img]
 
             rel_path = a['relativePath'].replace("\\","/")
@@ -110,14 +110,14 @@ class MastersDataset(utils.Dataset):
                 width=a['file_attributes']['Width'],
                 height=a['file_attributes']['Height'],
                 annotations=a)
-            i += 1
+
 
         training_dataset.prepare()
 
         val_imgs = images[split_point:]
         validation_dataset = MastersDataset()
-        i = 0
-        for img in val_imgs:
+
+        for i, img in enumerate(val_imgs):
             a = dataset[img]
 
             rel_path = a['relativePath'].replace("\\", "/")
@@ -130,7 +130,6 @@ class MastersDataset(utils.Dataset):
                 width=a['file_attributes']['Width'],
                 height=a['file_attributes']['Height'],
                 annotations=a)
-            i += 1
 
         validation_dataset.prepare()
 
@@ -141,16 +140,16 @@ class MastersDataset(utils.Dataset):
         dataset_dir = os.path.dirname(annotations_filepath)
 
         # Add images
-        annotations = json.load(open(annotations_filepath))
-        i = 0
-        for a in annotations.values():
+        with open(annotations_filepath) as file:
+            annotations = json.load(file)
+
+        for i, a in enumerate(annotations.values()):
             self.add_image(
                 MODEL_NAME, image_id=i, #TODO: id diferente?
                 path=os.path.join(dataset_dir, a['filename']),
                 width=a['file_attributes']['Width'],
                 height=a['file_attributes']['Height'],
                 annotations=a)
-            i += 1
     
     # Override from original Class
     def load_mask(self, image_id):
@@ -243,11 +242,8 @@ def GetModel(mode, weights_path, logs_path, docker=False):
     elif docker:
         import dockerUtils
         model_path = dockerUtils.GetModelPath(weights_path)
-    elif weights_path.lower() == "imagenet":
-        # Start from ImageNet trained weights
+    elif weights_path.lower() == "imagenet": # Start from ImageNet trained weights
         model_path = model.get_imagenet_weights()
-        # if weights_path.lower() == "coco":
-        #    model_path = COCO_MODEL_PATH
 
     else:
         model_path = weights_path
@@ -273,6 +269,7 @@ def zip_results(result):
         #ROI - y1, x1, y2, x2
         new_results.append(res)
     return new_results
+
 ############################################################
 # Execution
 ############################################################
@@ -407,8 +404,7 @@ if __name__ == '__main__':
         TrainModel(model, config, dataset_train, dataset_val)
     elif args.mode == "server":
         #TODO
-        #logging.warning("Not implemented yet")
-        import socket, pickle#, time
+        import socket, pickle
 
         HOST = socket.gethostbyname(socket.gethostname()) # Host IP
         PORT = args.port  # 50007 Arbitrary non-privileged port
