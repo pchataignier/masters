@@ -1,7 +1,6 @@
 # Data files and directories common in repo root
 Dataset/
 logs/
-configs/
 *.h5
 results/
 Movidius/
