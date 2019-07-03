@@ -217,10 +217,7 @@ class MastersDataset(utils.Dataset):
 # Auxiliary Functions and Classes
 ############################################################
 
-class EvaluationData:
-    def __init__(self, img_id, data):
-        self.img_id = img_id
-        self.data = data
+
 
 def GetConfig(mode, configFile=None):
     if mode == "train":
@@ -304,7 +301,7 @@ if __name__ == '__main__':
         parser.add_argument('--docker',
                             help='Use this if running on the \'pedrosc/mask-rcnn\' docker to use the pre-downloaded models',
                             action="store_true")
-        parser.add_argument('-p','--port', required=False,
+        parser.add_argument('-p','--port', required=False, type=int,
                             help='Port to listen to when in server mode')
         
         group = parser.add_mutually_exclusive_group()
@@ -405,6 +402,7 @@ if __name__ == '__main__':
     elif args.mode == "server":
         #TODO
         import socket, pickle
+        from socketUtils import *
 
         HOST = socket.gethostbyname(socket.gethostname()) # Host IP
         PORT = args.port  # 50007 Arbitrary non-privileged port
@@ -420,21 +418,27 @@ if __name__ == '__main__':
             logging.info('Connected by %s', addr)
 
             while True:
-                data = conn.recv(2^13)
-                if not data: break
-                eval_data = pickle.loads(data)
-                logging.debug('Received Package: %s', eval_data.img_id)
+                try:
+                    #data = conn.recv(2^25)
+                    data = recv_msg(conn)
+                    if not data: break
+                    eval_data = pickle.loads(data)
+                    logging.debug('Received Package: %s', eval_data.img_id)
 
-                logging.info('Running Detection...')
-                results = model.detect(list(eval_data.data))
-                results = zip_results(results[0])
+                    logging.info('Running Detection...')
+                    results = model.detect(list(eval_data.data))
+                    results = zip_results(results[0])
 
-                logging.info('Building Response...')
-                response = EvaluationData(eval_data.img_id, results)
-                data = pickle.dumps(response)
-                logging.info('Sending Results')
-                conn.send(data)
-
+                    logging.info('Building Response...')
+                    response = EvaluationData(eval_data.img_id, results)
+                    data = pickle.dumps(response)
+                    
+                    logging.info('Sending Results. Pkg size: ' + len(data))
+                    #conn.sendall(data)
+                    send_msg(data)
+                except Exception as e:
+                    print(e)
+                    break
             conn.close()
 
     else:

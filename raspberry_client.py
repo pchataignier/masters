@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-from masters import EvaluationData
+from socketUtils import *
 from imutils.video import VideoStream
 import datetime
 import argparse
@@ -22,9 +22,11 @@ class InferenceClient:
         data = EvaluationData(img_id, frame)
 
         pkg = pickle.dumps(data)
-        self.Server.send(pkg)
+        #self.Server.send(pkg)
+        send_msg(self.Server, pkg)
 
-        data = self.Server.recv(2 ^ 13)
+        #data = self.Server.recv(2 ^ 13)
+        data = recv_msg(self.Server)
         resp = pickle.loads(data)
         return resp
 
@@ -41,6 +43,7 @@ parser.add_argument("-P", "--picamera", action="store_true", help="Whether or no
 args = parser.parse_args()
 
 host, port = args.server.split(':')
+port = int(port)
 client = InferenceClient(host, port)
 #s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 #s.connect((host, port))
