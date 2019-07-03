@@ -22,10 +22,8 @@ class InferenceClient:
         data = EvaluationData(img_id, frame)
 
         pkg = pickle.dumps(data)
-        #self.Server.send(pkg)
         send_msg(self.Server, pkg)
 
-        #data = self.Server.recv(2 ^ 13)
         data = recv_msg(self.Server)
         resp = pickle.loads(data)
         return resp
@@ -45,8 +43,6 @@ args = parser.parse_args()
 host, port = args.server.split(':')
 port = int(port)
 client = InferenceClient(host, port)
-#s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#s.connect((host, port))
 
 # initialize the video stream and allow the cammera sensor to warmup
 vs = VideoStream(usePiCamera=args.picamera).start()

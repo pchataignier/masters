@@ -67,6 +67,7 @@ class InferenceConfig(MastersConfig):
         super().__init__(configFile)
         self.GPU_COUNT = 1
         self.IMAGES_PER_GPU = 1
+        self.BATCH_SIZE = 1
         self.DETECTION_MIN_CONFIDENCE = 0
 
 ############################################################
@@ -225,7 +226,7 @@ def GetConfig(mode, configFile=None):
     else:
         return InferenceConfig(configFile)
 
-def GetModel(mode, weights_path, logs_path, docker=False):
+def GetModel(mode, weights_path, logs_path, config, docker=False):
     if mode == "train":
         model = modellib.MaskRCNN(mode="training", config=config,
                                   model_dir=logs_path)
@@ -387,20 +388,19 @@ if __name__ == '__main__':
     
     # Configurations
     logging.debug("Creating Config")
-    config = GetConfig(args.mode)
+    config = GetConfig(args.mode, args.config)
     logging.debug("Config created")
     #config.display()
     
     # Create model
     logging.debug("Creating Model")
-    model = GetModel(args.mode, args.model, args.logs, args.docker)
+    model = GetModel(args.mode, args.model, args.logs, config, args.docker)
     logging.debug("Model created")
     
     if args.mode == "train":
         (dataset_train, dataset_val) = MastersDataset.auto_split_validation(args.dataset, args.val)
         TrainModel(model, config, dataset_train, dataset_val)
     elif args.mode == "server":
-        #TODO
         import socket, pickle
         from socketUtils import *
 
@@ -419,23 +419,21 @@ if __name__ == '__main__':
 
             while True:
                 try:
-                    #data = conn.recv(2^25)
                     data = recv_msg(conn)
                     if not data: break
                     eval_data = pickle.loads(data)
                     logging.debug('Received Package: %s', eval_data.img_id)
 
                     logging.info('Running Detection...')
-                    results = model.detect(list(eval_data.data))
+                    results = model.detect([eval_data.data])
                     results = zip_results(results[0])
 
                     logging.info('Building Response...')
                     response = EvaluationData(eval_data.img_id, results)
                     data = pickle.dumps(response)
                     
-                    logging.info('Sending Results. Pkg size: ' + len(data))
-                    #conn.sendall(data)
-                    send_msg(data)
+                    logging.info('Sending Results')
+                    send_msg(conn, data)
                 except Exception as e:
                     print(e)
                     break
