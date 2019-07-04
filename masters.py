@@ -60,6 +60,20 @@ class MastersConfig(Config):
             for atrib in configs:
                 setattr(self, atrib, configs[atrib])
 
+            # Re-Set values of computed attributes.
+            # Effective batch size
+            self.BATCH_SIZE = self.IMAGES_PER_GPU * self.GPU_COUNT
+
+            # Input image size
+            if self.IMAGE_RESIZE_MODE == "crop":
+                self.IMAGE_SHAPE = np.array([self.IMAGE_MIN_DIM, self.IMAGE_MIN_DIM, 3])
+            else:
+                self.IMAGE_SHAPE = np.array([self.IMAGE_MAX_DIM, self.IMAGE_MAX_DIM, 3])
+
+            # Image meta data length
+            # See compose_image_meta() for details
+            self.IMAGE_META_SIZE = 1 + 3 + 3 + 4 + 1 + self.NUM_CLASSES
+
 class InferenceConfig(MastersConfig):
     # Set batch size to 1 since we'll be running inference on
     # one image at a time. Batch size = GPU_COUNT * IMAGES_PER_GPU
@@ -390,7 +404,7 @@ if __name__ == '__main__':
     logging.debug("Creating Config")
     config = GetConfig(args.mode, args.config)
     logging.debug("Config created")
-    #config.display()
+    if args.loglevel == logging.DEBUG: config.display()
     
     # Create model
     logging.debug("Creating Model")
