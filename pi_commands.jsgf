@@ -1,0 +1,6 @@
+#JSGF V1.0;
+grammar pi_commands;
+
+<object> = (telephone | mug | bottle | remote [control]) {object};
+<find> = (find | where [is]) [the] <object>;
+public <pi_commands> = <find>;
