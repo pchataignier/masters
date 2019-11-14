@@ -277,7 +277,7 @@ def GetModel(mode, weights_path, logs_path, config, docker=False):
 def zip_results(result):
     new_results =[]
     for i in range(0,len(result["class_ids"])):
-        res = {"class_id": result["class_ids"][i], "mask": result["masks"][i], "roi": result["rois"][i], "score": result["scores"][i]}
+        res = {"class_id": result["class_ids"][i], "mask": result["masks"][:,:,i], "roi": result["rois"][i], "score": result["scores"][i]}
         #ROI - y1, x1, y2, x2
         new_results.append(res)
     return new_results
