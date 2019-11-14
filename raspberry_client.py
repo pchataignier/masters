@@ -33,6 +33,9 @@ class InferenceClient:
         resp = pickle.loads(data)
         return resp
 
+    def Close(self):
+        self.Server.close()
+
 def ip_with_port(arg):
     if re.match(r'\d{1,3}[.]\d{1,3}[.]\d{1,3}[.]\d{1,3}[:]\d+', arg):
         return arg
