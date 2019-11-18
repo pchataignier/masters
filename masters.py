@@ -440,10 +440,11 @@ if __name__ == '__main__':
 
                     logging.info('Running Detection...')
                     results = model.detect([eval_data.data])
-                    results = zip_results(results[0])
+                    if eval_data.zipResults:
+                        results = zip_results(results[0])
 
                     logging.info('Building Response...')
-                    response = EvaluationData(eval_data.img_id, results)
+                    response = EvaluationData(eval_data.img_id, results, zipResults=eval_data.zipResults)
                     data = pickle.dumps(response)
                     
                     logging.info('Sending Results')

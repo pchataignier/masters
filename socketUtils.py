@@ -1,9 +1,11 @@
 import struct
 
 class EvaluationData:
-    def __init__(self, img_id, data):
+    def __init__(self, img_id, data, zipResults = True):
         self.img_id = img_id
+        self.zipResults = zipResults
         self.data = data
+
 
 def send_msg(sock, msg):
     # Prefix each message with a 4-byte length (network byte order)
