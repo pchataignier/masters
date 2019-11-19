@@ -10,7 +10,7 @@ import pickle
 import uuid
 import os
 
-CLASSES = {'telephone':1, 'mug':2, 'bottle':3, 'remote control':4, 'remote':4, 'hand':5}
+CLASSES = {'telephone':1, 'mug':2, 'remote control':3, 'remote':3, 'bottle':4, 'hand':5}
 class_id = "class_id"
 mask = "mask"
 roi = "roi"
