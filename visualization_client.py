@@ -8,7 +8,7 @@ import socket
 import pickle
 import uuid
 import os
-from visualizationUtils import apply_results
+from visualizationUtils import apply_results, FPS
 import cv2
 
 CLASSES = {'telephone':1, 'mug':2, 'remote control':3, 'remote':3, 'bottle':4, 'hand':5}
@@ -63,7 +63,7 @@ host = socket.gethostbyname(socket.gethostname())
 port = int(port)
 client = InferenceClient(host, port)
 
-if os.path.exists(args.image):
+if args.image is not None and os.path.exists(args.image):
     image = cv2.imread(args.image)
     image = cv2.resize(image, (640, 480))
 
@@ -92,10 +92,31 @@ if args.image is None:
     # initialize the video stream and allow the cammera sensor to warmup
     vs = VideoStream().start()
     time.sleep(2.0)
+    fps = FPS()
 
-    while True:  # TODO: stop when found
-        # Get frame and run it through inferece
-        frame = vs.read()
-        frame_size = frame.shape
-        img_id = uuid.uuid4()
-        detections = client.GetDetections(img_id, frame)
+    try:
+        fps.start()
+        while True:
+            # Get frame and run it through inferece
+            frame = vs.read()
+            fps.update()
+
+            img_id = uuid.uuid4()
+            detections = client.GetDetections(img_id, frame)
+
+            results = detections.data
+            clone_img = frame.copy()
+            # Draw bbox and masks
+            clone_img = apply_results(clone_img, results)
+
+            cv2.imshow("Camera", clone_img)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+            print(fps.fps())
+    finally:
+        fps.stop()
+        client.Close()
+        vs.stop()
+        print("[INFO] elasped time: {:.2f}".format(fps.elapsed()))
+        print("[INFO] approx. FPS: {:.2f}".format(fps.fps()))
