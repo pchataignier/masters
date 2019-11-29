@@ -6,8 +6,8 @@ results/
 Movidius/
 TF_Model/
 temp/
-test/
-test*
+tests/
+test*.py
 quickTrain
 
 # Byte-compiled / optimized / DLL files
