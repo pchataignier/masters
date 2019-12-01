@@ -73,6 +73,6 @@ if __name__ == '__main__':
 
                 download_summary.append((fileId, filePath, str(ex) if ex else None, width, height))
 
-        df = pd.DataFrame(download_summary, columns=["ImageId", "FilePath", "Error", "Width", "Height"])
-        summary_path = os.path.join(output_dir, f"{split}_download_summary.csv")
+        df = pd.DataFrame(download_summary, columns=["ImageID", "FilePath", "Error", "Width", "Height"])
+        summary_path = os.path.join(output_dir, f"{split}-download-summary.csv")
         df.to_csv(summary_path, index=False)

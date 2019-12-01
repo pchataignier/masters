@@ -5,6 +5,11 @@ logs/
 results/
 Movidius/
 TF_Model/
+
+OpenImagesDataset/*/*.jpeg
+OpenImagesDataset/*/*.csv
+!OpenImagesDataset/*/*-filtered-*.csv
+
 temp/
 tests/
 test*.py
