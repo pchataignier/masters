@@ -11,7 +11,7 @@ from object_detection.utils import config_util
 def download_model(model_name):
     base_url = 'http://download.tensorflow.org/models/object_detection/'
     model_file = model_name + '.tar.gz'
-    
+
     urllib.request.urlretrieve(base_url + model_file, model_file)
     
     tarfile.open(model_file).extractall()
@@ -49,16 +49,31 @@ def override_pipeline_configs(config_file, overrides, out_dir=""):
 
 
 if __name__ == '__main__':
+    import argparse
 
-    model_name = "ssd_mobilenet_v2_oid_v4_2018_12_12"
+    parser = argparse.ArgumentParser(description="Downloads pre-trained Tensorflow models")
+    parser.add_argument('-d', '--dataset', required=True,
+                        help="Full path to root directory of the dataset.")
+    parser.add_argument('-m', '--models_csv', required=False, default="models.csv",
+                        help="Path to csv file containing the model names on Tensorflow download website. "
+                             "See https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md")
+    parser.add_argument('-n', '--n_classes', required=False, default=7, type=int, help="Number of classes")
+    args = parser.parse_args()
 
-    download_model(model_name)
+    dataset_dir = args.dataset
+    models_csv = args.models_csv
+    n_classes = args.n_classes
+
+    pd.set_option("display.max_colwidth", 10000)
+    models = pd.read_csv(models_csv)
 
     overrides = {"train_config.fine_tune_checkpoint": "model.ckpt",
-                 "label_map_path": "labelMap.pbtxt",
-                 "eval_input_path": "validation/validation.record-????-of-0010",
-                 "train_input_path": "train/train.record-????-of-0010",
-                 "train_shuffle":True, "num_classes":7}
+                 "label_map_path": f"{dataset_dir}/labelMap.pbtxt",
+                 "eval_input_path": f"{dataset_dir}/validation/validation.record-????-of-0010",
+                 "train_input_path": f"{dataset_dir}/train/train.record-????-of-0010",
+                 "train_shuffle": True, "num_classes": n_classes}
 
-    override_pipeline_configs(model_name+"/pipeline.config", overrides, model_name)
+    for model_id, model_name in models.itertuples(index=False):
+        download_model(model_name)
+        override_pipeline_configs(model_name+"/pipeline.config", overrides, model_name)
 
