@@ -1,4 +1,5 @@
 import os
+import math
 import argparse
 import pandas as pd
 import tensorflow as tf
@@ -65,45 +66,53 @@ if __name__ == '__main__':
 
     pd.set_option("display.max_colwidth", 10000)
 
-    #TODO: Loop over splits
-    split = "validation"
-
+    # Get class labels
     class_label_file = os.path.join(args.input_dir, "filteredLabels.csv")
-    bbox_file = os.path.join(args.input_dir, split, f"{split}-filtered-bbox.csv")
-    download_summary_file = os.path.join(args.input_dir, split, f"{split}-download-summary.csv")
-
     labels = pd.read_csv(class_label_file)
-    bboxes = pd.read_csv(bbox_file, escapechar='"')
-    download_summary = pd.read_csv(download_summary_file)
 
+    # Create labelMap.pbtxt
     label_map_path = os.path.join(args.output_dir, "labelMap.pbtxt")
     create_label_map(label_map_path, labels)
     label_dict = label_map_util.get_label_map_dict(label_map_util.load_labelmap(label_map_path))
 
-    bboxes = bboxes[bboxes.ImageID.isin(download_summary[~download_summary.FilePath.isnull()].ImageID)]
-    bboxes["LabelID"] = bboxes.LabelName.apply(lambda x: label_dict[x])
-    examples = bboxes.groupby("ImageID").agg({"LabelName": list, "LabelID":list,
-                                              "XMin": list, "XMax": list,
-                                              "YMin": list, "YMax": list}).reset_index()
-    examples = pd.merge(examples, download_summary, on="ImageID")
 
-    record_path = os.path.join(args.output_dir, split, f"{split}.record")
+    for split in ["validation", "test", "train"]:
 
-    if not args.shards:
-        writer = tf.io.TFRecordWriter(record_path)
-        for example in examples.itertuples(index=False):
-            tf_example = create_tf_example(example, split)
-            writer.write(tf_example.SerializeToString())
+        # Load bboxes
+        bbox_file = os.path.join(args.input_dir, split, f"{split}-filtered-bbox.csv")
+        bboxes = pd.read_csv(bbox_file, escapechar='"')
 
-        writer.close()
+        # Load download summary (from download_images.py)
+        download_summary_file = os.path.join(args.input_dir, split, f"{split}-download-summary.csv")
+        download_summary = pd.read_csv(download_summary_file)
 
-    else: #Sharded records
-        num_shards=args.shards
+        # Filter bboxes and generate examples table
+        bboxes = bboxes[bboxes.ImageID.isin(download_summary[~download_summary.FilePath.isnull()].ImageID)]
+        bboxes["LabelID"] = bboxes.LabelName.apply(lambda x: label_dict[x])
+        examples = bboxes.groupby("ImageID").agg({"LabelName": list, "LabelID":list,
+                                                  "XMin": list, "XMax": list,
+                                                  "YMin": list, "YMax": list}).reset_index()
+        examples = pd.merge(examples, download_summary, on="ImageID")
 
-        with contextlib2.ExitStack() as tf_record_close_stack:
-            output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(tf_record_close_stack, record_path, num_shards)
+        record_path = os.path.join(args.output_dir, split, f"{split}.record")
 
-            for example in examples.itertuples():
-                tf_example = create_tf_example(example)
-                output_shard_index = example.Index % num_shards
-                output_tfrecords[output_shard_index].write(tf_example.SerializeToString())
+        num_shards = math.ceil(examples.ImageID.count()/args.shards) if args.shards else 1
+
+        # Single record file
+        if not args.shards or num_shards==1:
+            writer = tf.io.TFRecordWriter(record_path)
+            for example in examples.itertuples(index=False):
+                tf_example = create_tf_example(example, split)
+                writer.write(tf_example.SerializeToString())
+
+            writer.close()
+
+        # Sharded records
+        else:
+            with contextlib2.ExitStack() as tf_record_close_stack:
+                output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(tf_record_close_stack, record_path, num_shards)
+
+                for example in examples.itertuples():
+                    tf_example = create_tf_example(example, split)
+                    output_shard_index = example.Index % num_shards
+                    output_tfrecords[output_shard_index].write(tf_example.SerializeToString())

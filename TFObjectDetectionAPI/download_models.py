@@ -5,6 +5,7 @@ import os
 import tarfile
 import urllib
 import pandas as pd
+from glob import glob
 from object_detection.utils import config_util
 
 
@@ -48,6 +49,18 @@ def override_pipeline_configs(config_file, overrides, out_dir=""):
     config_util.save_pipeline_config(config_util.create_pipeline_proto_from_configs(configs), out_dir)
 
 
+def get_record_file_patten(dataset_dir, split):
+    records = glob(f"{dataset_dir}/{split}/{split}.record*")
+
+    if len(records) == 1:
+        return records[0]
+
+    pattern = records[0]
+    to_replace = pattern.split('-')[-3]
+
+    return pattern.replace(to_replace, "?" * len(to_replace))
+
+
 if __name__ == '__main__':
     import argparse
 
@@ -69,8 +82,8 @@ if __name__ == '__main__':
 
     overrides = {"train_config.fine_tune_checkpoint": "model.ckpt",
                  "label_map_path": f"{dataset_dir}/labelMap.pbtxt",
-                 "eval_input_path": f"{dataset_dir}/validation/validation.record-????-of-0010",
-                 "train_input_path": f"{dataset_dir}/train/train.record-????-of-0010",
+                 "eval_input_path": f"{get_record_file_patten(dataset_dir, 'validation')}",
+                 "train_input_path": f"{get_record_file_patten(dataset_dir, 'train')}",
                  "train_shuffle": True, "num_classes": n_classes}
 
     for model_id, model_name in models.itertuples(index=False):
