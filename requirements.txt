@@ -1,12 +1,13 @@
+tensorflow>=1.13,<2
+opencv-contrib-python
+imutils
 Pillow
 imgaug
 numpy
 scipy
 contextlib2
 pandas
-imutils
 imread
-tensorflow>=1.13,<2
 SpeechRecognition
 pyttsx3
 sounddevice
