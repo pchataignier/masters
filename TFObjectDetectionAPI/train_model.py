@@ -1,6 +1,7 @@
 import argparse
 import tensorflow as tf
 from object_detection import model_lib
+from object_detection import model_hparams
 
 parser = argparse.ArgumentParser(description="Train model from pipeline configs")
 parser.add_argument('-o', '--out_dir', required=True,
@@ -17,7 +18,8 @@ train_and_eval_dict = model_lib.create_estimator_and_inputs(
     run_config=config,
     pipeline_config_path=args.pipeline_config,
     train_steps=args.num_train_steps,
-    sample_1_of_n_eval_examples=args.sample_1_of_n_eval_examples)
+    sample_1_of_n_eval_examples=args.sample_1_of_n_eval_examples,
+    hparams=model_hparams.create_hparams(None))
 
 estimator = train_and_eval_dict['estimator']
 train_input_fn = train_and_eval_dict['train_input_fn']
