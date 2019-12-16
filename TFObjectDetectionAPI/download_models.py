@@ -80,13 +80,13 @@ if __name__ == '__main__':
     pd.set_option("display.max_colwidth", 10000)
     models = pd.read_csv(models_csv)
 
-    overrides = {"train_config.fine_tune_checkpoint": "model.ckpt",
-                 "label_map_path": f"{dataset_dir}/labelMap.pbtxt",
-                 "eval_input_path": f"{get_record_file_patten(dataset_dir, 'validation')}",
-                 "train_input_path": f"{get_record_file_patten(dataset_dir, 'train')}",
-                 "train_shuffle": True, "num_classes": n_classes}
-
     for model_id, model_name in models.itertuples(index=False):
+        overrides = {"train_config.fine_tune_checkpoint": f"{model_name}/model.ckpt",
+                     "label_map_path": f"{dataset_dir}/labelMap.pbtxt",
+                     "eval_input_path": f"{get_record_file_patten(dataset_dir, 'validation')}",
+                     "train_input_path": f"{get_record_file_patten(dataset_dir, 'train')}",
+                     "train_shuffle": True, "num_classes": n_classes}
+
         download_model(model_name)
         override_pipeline_configs(model_name+"/pipeline.config", overrides, model_name)
 
