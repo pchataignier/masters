@@ -9,13 +9,15 @@ from glob import glob
 from object_detection.utils import config_util
 
 
-def download_model(model_name):
+def download_model(model_name, out_dir=None):
     base_url = 'http://download.tensorflow.org/models/object_detection/'
     model_file = model_name + '.tar.gz'
 
     urllib.request.urlretrieve(base_url + model_file, model_file)
-    
-    tarfile.open(model_file).extractall()
+
+    if not out_dir: out_dir=model_name
+
+    tarfile.open(model_file).extractall(out_dir)
     
     os.remove(model_file)
 
@@ -81,12 +83,12 @@ if __name__ == '__main__':
     models = pd.read_csv(models_csv)
 
     for model_id, model_name in models.itertuples(index=False):
-        overrides = {"train_config.fine_tune_checkpoint": f"{model_name}/model.ckpt",
+        overrides = {"train_config.fine_tune_checkpoint": f"{model_id}/model.ckpt",
                      "label_map_path": f"{dataset_dir}/labelMap.pbtxt",
                      "eval_input_path": f"{get_record_file_patten(dataset_dir, 'validation')}",
                      "train_input_path": f"{get_record_file_patten(dataset_dir, 'train')}",
                      "train_shuffle": True, "num_classes": n_classes}
 
-        download_model(model_name)
+        download_model(model_name, model_id)
         override_pipeline_configs(model_name+"/pipeline.config", overrides, model_name)
 
