@@ -94,6 +94,26 @@ if __name__ == '__main__':
                                                   "YMin": list, "YMax": list}).reset_index()
         examples = pd.merge(examples, download_summary, on="ImageID")
 
+        # Duplicate examples of classes that are un-balanced
+        if split == 'train':
+            class_load = bboxes.groupby('LabelID').agg({"LabelName":'count', "ImageID":list}).reset_index()
+
+            target = class_load.LabelName.max()
+            examples_clone = examples.copy()
+            to_append = []
+
+            for class_id, num_examples, img_ids in class_load.itertuples(index=False):
+                factor = math.ceil(target / num_examples) - 1
+                if factor <= 0: continue
+
+                to_replicate = examples_clone[examples_clone.ImageID.isin(img_ids)]
+                to_append += [to_replicate] * factor
+
+            examples = examples.append(to_append, ignore_index=True)
+
+        # Shuffle 'examples' rows
+        examples = examples.sample(frac=1, random_state=22).reset_index(drop=True)
+
         record_path = os.path.join(args.output_dir, split, f"{split}.record")
 
         num_shards = math.ceil(examples.ImageID.count()/args.shards) if args.shards else 1
