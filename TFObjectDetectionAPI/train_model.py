@@ -1,5 +1,6 @@
 import argparse
 import tensorflow as tf
+from datetime import datetime
 from object_detection import model_lib
 from object_detection import model_hparams
 
@@ -12,14 +13,19 @@ parser.add_argument('--sample_1_of_n_eval_examples', required=False, default=1, 
 
 args = parser.parse_args()
 
-config = tf.estimator.RunConfig(model_dir=args.out_dir)
+config_proto = tf.ConfigProto()
+config_proto.gpu_options.allow_growth = True
+
+timestamp = datetime.now().strftime("-%Y%m%d-%H%M%S-%f")
+config = tf.estimator.RunConfig(model_dir=args.out_dir+timestamp, session_config=config_proto)
 
 train_and_eval_dict = model_lib.create_estimator_and_inputs(
     run_config=config,
     pipeline_config_path=args.pipeline_config,
     train_steps=args.num_train_steps,
     sample_1_of_n_eval_examples=args.sample_1_of_n_eval_examples,
-    hparams=model_hparams.create_hparams(None))
+    hparams=model_hparams.create_hparams(None),
+    save_final_config=True)
 
 estimator = train_and_eval_dict['estimator']
 train_input_fn = train_and_eval_dict['train_input_fn']

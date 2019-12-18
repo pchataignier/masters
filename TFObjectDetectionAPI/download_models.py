@@ -2,6 +2,7 @@
 # coding: utf-8
 
 import os
+import re
 import tarfile
 import urllib
 import pandas as pd
@@ -50,6 +51,16 @@ def override_pipeline_configs(config_file, overrides, out_dir=""):
 
     config_util.save_pipeline_config(config_util.create_pipeline_proto_from_configs(configs), out_dir)
 
+def post_process_pipeline_file(filename):
+    with open(filename, 'r+') as f:
+        text = f.read()
+
+        text.replace("open_images_V2_detection_metrics", "oid_V2_detection_metrics")
+        text = re.sub(r'keep_checkpoint_every_n_hours:[\s]*[\d.]*', '', text)
+
+        f.seek(0)
+        f.write(text)
+        f.truncate()
 
 def get_record_file_patten(dataset_dir, split):
     records = glob(f"{dataset_dir}/{split}/{split}.record*")
@@ -87,8 +98,9 @@ if __name__ == '__main__':
                      "label_map_path": f"{dataset_dir}/labelMap.pbtxt",
                      "eval_input_path": f"{get_record_file_patten(dataset_dir, 'validation')}",
                      "train_input_path": f"{get_record_file_patten(dataset_dir, 'train')}",
-                     "train_shuffle": True, "num_classes": n_classes}
+                     "batch_size": 1, "train_shuffle": True, "num_classes": n_classes}
 
         download_model(model_name, model_id)
-        override_pipeline_configs(model_name+"/pipeline.config", overrides, model_name)
+        override_pipeline_configs(model_id+"/pipeline.config", overrides, model_id)
+        post_process_pipeline_file(model_id+"/pipeline.config")
 
