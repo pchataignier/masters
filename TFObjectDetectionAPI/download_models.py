@@ -37,6 +37,8 @@ def set_number_of_classes(model_config, n_classes):
 def override_pipeline_configs(config_file, overrides, out_dir=""):
     configs = config_util.get_configs_from_pipeline_file(config_file)
 
+    configs['train_config'].from_detection_checkpoint = True
+
     for field, value in overrides.items():
         if field == "num_classes":
             set_number_of_classes(configs['model'], value)

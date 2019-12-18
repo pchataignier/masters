@@ -1,11 +1,35 @@
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import argparse
 import tensorflow as tf
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 from datetime import datetime
 from object_detection import model_lib
 from object_detection import model_hparams
+
+def tensorflow_shutup():
+    """
+    Make Tensorflow less verbose
+    """
+    try:
+        # noinspection PyPackageRequirements
+        import os
+        from tensorflow import logging
+        logging.set_verbosity(logging.ERROR)
+        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+        # Monkey patching deprecation utils to shut it up! Maybe good idea to disable this once after upgrade
+        # noinspection PyUnusedLocal
+        def deprecated(date, instructions, warn_once=True):
+            def deprecated_wrapper(func):
+                return func
+            return deprecated_wrapper
+
+        from tensorflow.python.util import deprecation
+        deprecation.deprecated = deprecated
+
+    except ImportError:
+        pass
+
+tensorflow_shutup()
 
 parser = argparse.ArgumentParser(description="Train model from pipeline configs")
 parser.add_argument('-o', '--out_dir', required=True,
