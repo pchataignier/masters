@@ -1,5 +1,8 @@
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import argparse
 import tensorflow as tf
+tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 from datetime import datetime
 from object_detection import model_lib
 from object_detection import model_hparams
