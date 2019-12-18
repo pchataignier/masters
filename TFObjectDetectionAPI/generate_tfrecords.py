@@ -116,7 +116,7 @@ if __name__ == '__main__':
 
         record_path = os.path.join(args.output_dir, split, f"{split}.record")
 
-        num_shards = math.ceil(examples.ImageID.count()/args.shards) if args.shards else 1
+        num_shards = math.ceil(examples.shape[0]/args.shards) if args.shards else 1
 
         # Single record file
         if not args.shards or num_shards==1:

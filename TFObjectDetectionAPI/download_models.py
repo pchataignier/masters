@@ -18,9 +18,10 @@ def download_model(model_name, out_dir=None):
 
     if not out_dir: out_dir=model_name
 
-    tarfile.open(model_file).extractall(out_dir)
+    tarfile.open(model_file).extractall()
     
     os.remove(model_file)
+    os.rename(model_name, out_dir)
 
 
 def set_number_of_classes(model_config, n_classes):
@@ -55,7 +56,7 @@ def post_process_pipeline_file(filename):
     with open(filename, 'r+') as f:
         text = f.read()
 
-        text.replace("open_images_V2_detection_metrics", "oid_V2_detection_metrics")
+        text = text.replace("open_images_V2_detection_metrics", "oid_V2_detection_metrics")
         text = re.sub(r'keep_checkpoint_every_n_hours:[\s]*[\d.]*', '', text)
 
         f.seek(0)
