@@ -85,6 +85,7 @@ if __name__ == '__main__':
                         help="Path to csv file containing the model names on Tensorflow download website. "
                              "See https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md")
     parser.add_argument('-n', '--n_classes', required=False, default=7, type=int, help="Number of classes")
+    parser.add_argument('--override_only', required=False, action='store_true', help="Skip downloading the files. Used for fixing config files")
     args = parser.parse_args()
 
     dataset_dir = args.dataset
@@ -100,8 +101,9 @@ if __name__ == '__main__':
                      "eval_input_path": f"{get_record_file_patten(dataset_dir, 'validation')}",
                      "train_input_path": f"{get_record_file_patten(dataset_dir, 'train')}",
                      "batch_size": 1, "train_shuffle": True, "num_classes": n_classes}
+        if not args.override_only:
+            download_model(model_name, model_id)
 
-        download_model(model_name, model_id)
         override_pipeline_configs(model_id+"/pipeline.config", overrides, model_id)
         post_process_pipeline_file(model_id+"/pipeline.config")
 
