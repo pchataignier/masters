@@ -24,8 +24,40 @@ def download_model(model_name, out_dir=None):
     os.rename(model_name, out_dir)
 
 
+def get_model_architecture(model_config):
+    return model_config.WhichOneof("model")
+
+
+def get_image_resizer_type(resizer):
+    return resizer.WhichOneof('image_resizer_oneof')
+
+
+def set_keep_aspect_ratio_resizer_dimensions(resizer, min_dimension, max_dimension):
+    resizer.keep_aspect_ratio_resizer.min_dimension = min_dimension
+    resizer.keep_aspect_ratio_resizer.max_dimension = max_dimension
+
+
+def set_fixed_shape_resizer_dimensions(resizer, width, height):
+    resizer.fixed_shape_resizer.width = width
+    resizer.fixed_shape_resizer.height = height
+
+
+def set_resizer_width_height(model_config, width, height):
+    meta_architecture = get_model_architecture(model_config)
+
+    resizer = model_config.faster_rcnn.image_resizer if meta_architecture == "faster_rcnn" else model_config.ssd.image_resizer
+    resizer_type = get_image_resizer_type(resizer)
+
+    if resizer_type == "keep_aspect_ratio_resizer":
+        min_dimension = min(width, height)
+        max_dimension = max(width, height)
+        set_keep_aspect_ratio_resizer_dimensions(resizer, min_dimension, max_dimension)
+
+    elif resizer_type == "fixed_shape_resizer":
+        set_fixed_shape_resizer_dimensions(resizer, width, height)
+
 def set_number_of_classes(model_config, n_classes):
-    meta_architecture = model_config.WhichOneof("model")
+    meta_architecture = get_model_architecture(model_config)
     if meta_architecture == "faster_rcnn":
         model_config.faster_rcnn.num_classes = n_classes
     elif meta_architecture == "ssd":
@@ -42,7 +74,8 @@ def override_pipeline_configs(config_file, overrides, out_dir=""):
     for field, value in overrides.items():
         if field == "num_classes":
             set_number_of_classes(configs['model'], value)
-
+        elif field == "width_height":
+            set_resizer_width_height(configs['model'], value[0], value[1])
         elif not config_util._maybe_update_config_with_key_value(configs, field, value):
             try:
                 config_util._update_generic(configs, field, value)
@@ -102,7 +135,8 @@ if __name__ == '__main__':
                      "label_map_path": f"{dataset_dir}/labelMap.pbtxt",
                      "eval_input_path": f"{get_record_file_patten(dataset_dir, 'validation')}",
                      "train_input_path": f"{get_record_file_patten(dataset_dir, 'train')}",
-                     "batch_size": 1, "train_shuffle": True, "num_classes": n_classes}
+                     "batch_size": 1, "train_shuffle": True,
+                     "num_classes": n_classes, "width_height":(640,480)}
         if not args.override_only:
             download_model(model_name, model_id)
 
