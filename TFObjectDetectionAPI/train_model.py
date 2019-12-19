@@ -53,7 +53,7 @@ parser.add_argument('-p', '--pipeline_config', required=True, help="Path to pipe
 parser.add_argument('--num_train_steps', required=False, default=None, type=int, help="Number of training steps (overrides pipeline).")
 parser.add_argument('--sample_1_of_n_eval_examples', required=False, default=1, type=int, help="Will sample one of every n eval input examples, where n is provided.")
 parser.add_argument('-l', '--logs', required=False, help="Path to logs directory")
-parser.add_argument('v', '--verbose', required=False, action='store_true')
+parser.add_argument('-v', '--verbose', required=False, action='store_true')
 
 args = parser.parse_args()
 
