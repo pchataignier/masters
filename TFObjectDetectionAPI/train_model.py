@@ -62,7 +62,7 @@ if not args.verbose: tensorflow_shutup()
 timestamp = datetime.now().strftime("-%Y%m%d-%H%M%S-%f")
 modelId = os.path.basename(os.path.normpath(args.out_dir))
 out_dir = args.out_dir+timestamp
-log_dir = args.logs if args.log else out_dir
+log_dir = args.logs if args.logs else out_dir
 
 config_proto = tf.ConfigProto()
 config_proto.gpu_options.allow_growth = True
