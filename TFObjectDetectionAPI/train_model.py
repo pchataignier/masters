@@ -6,16 +6,17 @@ from object_detection import model_lib
 from object_detection import model_hparams
 from object_detection.protos import pipeline_pb2
 
-def tensorflow_shutup():
+def tensorflow_shutup(verbose=False):
     """
     Make Tensorflow less verbose
     """
     try:
         # noinspection PyPackageRequirements
-        #import os
-        from tensorflow.compat.v1 import logging
-        logging.set_verbosity(logging.ERROR)
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+        if not verbose:
+            #import os
+            from tensorflow.compat.v1 import logging
+            logging.set_verbosity(logging.ERROR)
+            os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
         # Monkey patching deprecation utils to shut it up! Maybe good idea to disable this once after upgrade
         # noinspection PyUnusedLocal
@@ -57,7 +58,7 @@ parser.add_argument('-v', '--verbose', required=False, action='store_true')
 
 args = parser.parse_args()
 
-if not args.verbose: tensorflow_shutup()
+tensorflow_shutup(args.verbose)
 
 timestamp = datetime.now().strftime("-%Y%m%d-%H%M%S-%f")
 modelId = os.path.basename(os.path.normpath(args.out_dir))
