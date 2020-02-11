@@ -7,6 +7,7 @@ Movidius/
 TF_Model/
 
 OpenImagesDataset/*/*.jpeg
+OpenImagesDataset/*.pbtxt
 OpenImagesDataset/*/*.csv
 !OpenImagesDataset/*/*-filtered-*.csv
 
