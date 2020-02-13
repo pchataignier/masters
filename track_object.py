@@ -22,7 +22,7 @@ def remap_classification_name(classification):
     return GROUPINGS.get(classification, classification)
 
 def play_error():
-    sd.play(error_sampling, error_wav)
+    sd.play(error_wav,error_sampling)
     #os.system('aplay -q error.wav')
 
 def get_box_centre(box):
