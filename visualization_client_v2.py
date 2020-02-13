@@ -26,7 +26,7 @@ resnet = "frozen-resnet101-oid-8466"
 #DATASET_DIR = "./OpenImagesDataset"
 MODELS_DIR = "../models/"
 LABEL_MAP = "./OpenImagesDataset/labelMap.pbtxt" #oid_labelMap #labelMap
-PATH_TO_CKPT = MODELS_DIR + f"{faster_rcnn}/frozen_inference_graph.pb"
+PATH_TO_CKPT = MODELS_DIR + f"{mobilenet}/frozen_inference_graph.pb"
 
 category_index = label_map_util.create_category_index_from_labelmap(LABEL_MAP, use_display_name=True)
 
@@ -36,15 +36,15 @@ time.sleep(2.0)
 ## Load detection graph
 detection_graph = tf.Graph()
 with detection_graph.as_default():
-  od_graph_def = tf.GraphDef()
-  with tf.gfile.GFile(PATH_TO_CKPT, 'rb') as fid:
+  od_graph_def = tf.compat.v1.GraphDef()
+  with tf.io.gfile.GFile(PATH_TO_CKPT, 'rb') as fid:
     serialized_graph = fid.read()
     od_graph_def.ParseFromString(serialized_graph)
     tf.import_graph_def(od_graph_def, name='')
 
 ## Main inference loop
 with detection_graph.as_default():
-    with tf.Session(graph=detection_graph) as sess:
+    with tf.compat.v1.Session(graph=detection_graph) as sess:
         try:
             while True:
                 image_np = cap.read()
@@ -64,8 +64,8 @@ with detection_graph.as_default():
                   [boxes, scores, classes, num_detections],
                   feed_dict={image_tensor: image_np_expanded})
 
-                boxes = np.squeeze(boxes)
-                classes = np.squeeze(classes).astype(np.int32)
+                boxes = np.squeeze(boxes) # ymin, xmin, ymax, xmax = boxes[i]
+                classes = np.squeeze(classes).astype(np.int32) # category_index[classes[i]]["name"]
                 scores = np.squeeze(scores)
                 num_detections = int(num_detections)
 
