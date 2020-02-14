@@ -11,27 +11,31 @@ from object_detection.utils import label_map_util
 from object_detection.utils import visualization_utils as vis_util
 
 import sounddevice as sd
-from scipy.io.wavfile import read
+from scipy.io.wavfile import read as read_wav
 
 GROUPINGS = {"Mobile phone":"phone", "Corded phone":"phone", "Telephone":"phone", "Remote control":"remote"}
-error_sampling, error_wav=read('error.wav')
 
 
 ## Auxiliary Functions
 def remap_classification_name(classification):
     return GROUPINGS.get(classification, classification)
 
+error_sampling, error_wav=read_wav("error.wav")
 def play_error():
     sd.play(error_wav,error_sampling)
-    #os.system('aplay -q error.wav')
+
+ready_sampling, ready_wav=read_wav("ready.wav")
+def play_ready():
+    sd.play(ready_wav,ready_sampling)
 
 def get_box_centre(box):
-    ymin, xmin, ymax, xmax = box
-    return ( ((xmax - xmin) / 2) + xmin, ((ymax - ymin) / 2) + ymin )
+    y_min, x_min, y_max, x_max = box
+    return ( ((x_max - x_min) / 2) + x_min, ((y_max - y_min) / 2) + y_min )
 
 def get_box_area(box):
-    ymin, xmin, ymax, xmax = box
-    return (xmax - xmin) * (ymax - ymin)
+    y_min, x_min, y_max, x_max = box
+    return (x_max - x_min) * (y_max - y_min)
+
 
 ## Construct the argument parse and parse the arguments
 parser = argparse.ArgumentParser()
@@ -43,18 +47,10 @@ args = parser.parse_args()
 
 LABEL_MAP = args.label_map
 PATH_TO_CKPT = args.model
+TARGET_CLASS = args.target
+SHOULD_VISUALIZE = args.visualize
 
-# faster_rcnn = "../models/frozen-faster-rcnn-oid-1081/frozen_inference_graph.pb"
-# mobilenet = "../models/frozen-mobilenet-oid-7869/frozen_inference_graph.pb"
-# mobile_coco = "../models/frozen-mobilenet-fpn-coco-5981/frozen_inference_graph.pb"
-# resnet = "../models/frozen-resnet101-oid-8466/frozen_inference_graph.pb"
-#
-# #DATASET_DIR = "./OpenImagesDataset"
-# MODELS_DIR = "../models/"
-# LABEL_MAP = "./OpenImagesDataset/labelMap.pbtxt" #oid_labelMap #labelMap
-# PATH_TO_CKPT = f"../models/{mobile_coco}/frozen_inference_graph.pb"
-
-spkr = Speaker()
+spkr = Speaker(delay=0, tolerance=0.2)
 category_index = label_map_util.create_category_index_from_labelmap(LABEL_MAP, use_display_name=True)
 
 
@@ -108,9 +104,9 @@ with detection_graph.as_default():
                 target = []
                 for i in range(num_detections):
                     pred_class = category_index[classes[i]]["name"]
-                    pred_class = GROUPINGS.get(pred_class, pred_class)
+                    pred_class = remap_classification_name(pred_class)
                     box = boxes[i]
-                    if pred_class == args.target:
+                    if pred_class == TARGET_CLASS:
                         area = get_box_area(box)
                         if area > lastArea:
                             lastArea = area
@@ -124,28 +120,9 @@ with detection_graph.as_default():
                     play_error()
                     time.sleep(0.1)
                 else:
-                    # Get target vector
-                    vector_hor = target(0) - centre(0)
-                    vector_ver = target(1) - centre(1)
+                    spkr.give_directions(target, centre)
 
-                    horizontal_tolerance = 0.33 #frame_size(0) / 3
-                    vertical_tolerance = 0.33 #frame_size(1) / 3
-
-                    # Queue up directions
-                    if vector_hor > 1-horizontal_tolerance:
-                        spkr.Queue("Rigth")
-                    elif vector_hor < horizontal_tolerance:
-                        spkr.Queue("Left")
-
-                    if vector_ver > 1-vertical_tolerance:
-                        spkr.Queue("Down")
-                    elif vector_ver < vertical_tolerance:
-                        spkr.Queue("Up")
-
-                    # Give directions
-                    spkr.Flush()
-
-                if args.visualize:
+                if SHOULD_VISUALIZE:
                     # Visualization of the results of a detection.
                     vis_util.visualize_boxes_and_labels_on_image_array(
                         frame,
@@ -154,7 +131,7 @@ with detection_graph.as_default():
                         scores,
                         category_index,
                         use_normalized_coordinates=True,
-                        line_thickness=8)
+                        line_thickness=8) # min_score_thresh=.5
 
                     cv2.imshow('object detection', frame)
                     if cv2.waitKey(25) & 0xFF == ord('q'):
