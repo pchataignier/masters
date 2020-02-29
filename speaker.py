@@ -8,6 +8,13 @@ class Speaker:
         self._delayInSeconds = delay
         self._tolerance = tolerance
 
+        # Patch for Windows voices TODO: do this right
+        voices = self.engine.getProperty('voices')
+        for voice in voices:
+            if "English" in voice.name:
+                self.engine.setProperty('voice', voice.id)
+                break
+
     def _delay(self):
         if self._delayInSeconds > 0:
             time.sleep(self._delayInSeconds)
