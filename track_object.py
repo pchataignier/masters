@@ -3,8 +3,11 @@ import re
 import cv2
 import time
 import argparse
+import threading
 import numpy as np
 import tensorflow as tf
+from chirp import Chirp
+from beeper import Beeper
 from speaker import Speaker
 from imutils.video import VideoStream
 from object_detection.utils import label_map_util
@@ -36,6 +39,11 @@ def get_box_area(box):
     y_min, x_min, y_max, x_max = box
     return (x_max - x_min) * (y_max - y_min)
 
+def get_input():
+    global flag
+    _=input('Press a key \n')
+    # thread doesn't continue until key is pressed
+    flag=False
 
 ## Construct the argument parse and parse the arguments
 parser = argparse.ArgumentParser()
@@ -43,18 +51,30 @@ parser.add_argument("-l", "--label_map", required=True, help="Path to the '.pbtx
 parser.add_argument("-m", "--model", required=True, help="Path to the '.pb' inference graph file")
 parser.add_argument("-t", "--target", required=True, help="Object to track")
 parser.add_argument("-v", "--visualize", action="store_true", help="Whether or not to display the captured video and inference")
+parser.add_argument("-c", "--camera", required=False, type=int, default=0, help="Camera number")
+parser.add_argument("-o", "--output_mode", required=True, choices=["speaker", "beeper", "chirp"], help="Output mode: [speaker, beeper, chirps]")
 args = parser.parse_args()
 
 LABEL_MAP = args.label_map
 PATH_TO_CKPT = args.model
 TARGET_CLASS = args.target
 SHOULD_VISUALIZE = args.visualize
+CAMERA_ID = args.camera
+OUTPUT_MODE = args.output_mode
 
-spkr = Speaker(delay=0, tolerance=0.2)
+## Define output mode
+guide = None
+if OUTPUT_MODE == "speaker":
+    guide = Speaker(tolerance=0.15, delay=0)
+elif OUTPUT_MODE == "beeper":
+    guide = Beeper(tolerance=0.15, delay=0)
+elif OUTPUT_MODE == "chirp":
+    guide = Chirp(tolerance=0.15, delay=0)
+
 category_index = label_map_util.create_category_index_from_labelmap(LABEL_MAP, use_display_name=True)
 
-
 ## Load detection graph
+start = time.perf_counter()
 detection_graph = tf.Graph()
 with detection_graph.as_default():
   od_graph_def = tf.compat.v1.GraphDef()
@@ -63,14 +83,26 @@ with detection_graph.as_default():
     od_graph_def.ParseFromString(serialized_graph)
     tf.import_graph_def(od_graph_def, name='')
 
-camera = VideoStream().start()
-time.sleep(2.0)
+stop = time.perf_counter()
+print(f"Loading graph: {stop-start}")
+
+## Camera startup
+camera = VideoStream(CAMERA_ID).start()
+time.sleep(1.0)
 
 ## Main inference loop
+start = time.perf_counter()
 with detection_graph.as_default():
     with tf.compat.v1.Session(graph=detection_graph) as sess:
+        stop = time.perf_counter()
+        print(f"Loading session: {stop - start}")
+        play_ready()
+        flag=1
+        i = threading.Thread(target=get_input)
+        i.start()
         try:
-            while True:
+            start = time.perf_counter()
+            while flag==1:
                 frame = camera.read()
                 frame_size = frame.shape
 
@@ -106,12 +138,12 @@ with detection_graph.as_default():
                     pred_class = category_index[classes[i]]["name"]
                     pred_class = remap_classification_name(pred_class)
                     box = boxes[i]
-                    if pred_class == TARGET_CLASS:
+                    if pred_class == TARGET_CLASS and scores[i]>=0.5:
                         area = get_box_area(box)
                         if area > lastArea:
                             lastArea = area
                             target = get_box_centre(box)
-                    elif pred_class == "Human hand":
+                    elif pred_class == "Human hand" and scores[i]>=0.5:
                         centre = get_box_centre(box)
                         isHand = True
 
@@ -120,7 +152,7 @@ with detection_graph.as_default():
                     play_error()
                     time.sleep(0.1)
                 else:
-                    spkr.give_directions(target, centre)
+                    guide.give_directions(target, centre)
 
                 if SHOULD_VISUALIZE:
                     # Visualization of the results of a detection.
@@ -131,13 +163,17 @@ with detection_graph.as_default():
                         scores,
                         category_index,
                         use_normalized_coordinates=True,
-                        line_thickness=8) # min_score_thresh=.5
+                        line_thickness=8) #, min_score_thresh=.1
 
                     cv2.imshow('object detection', frame)
                     if cv2.waitKey(25) & 0xFF == ord('q'):
-                        cv2.destroyAllWindows()
+                        # cv2.destroyAllWindows()
                         break
 
                 #time.sleep(0.1)
+            stop = time.perf_counter()
+            print(f"Guidance Loop: {stop - start}")
         finally:
+            if SHOULD_VISUALIZE:
+                cv2.destroyAllWindows()
             camera.stop()
