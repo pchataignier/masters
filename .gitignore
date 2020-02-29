@@ -15,6 +15,7 @@ temp/
 tests/
 test*.py
 quickTrain
+trainedModels/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
