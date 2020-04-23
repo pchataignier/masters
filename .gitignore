@@ -9,6 +9,7 @@ TF_Model/
 OpenImagesDataset/*/*.jpeg
 OpenImagesDataset/*.pbtxt
 OpenImagesDataset/*/*.csv
+OpenImagesDataset/*/*.tfrecord*
 !OpenImagesDataset/*/*-filtered-*.csv
 
 temp/
@@ -24,3 +25,7 @@ __pycache__/
 
 #PyCharm
 .idea/
+
+#Jupyter Checkpoints
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
