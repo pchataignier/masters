@@ -51,8 +51,14 @@ parser = argparse.ArgumentParser(description="Train model from pipeline configs"
 parser.add_argument('-o', '--out_dir', required=True,
                     help="Path to output model directory where event and checkpoint files will be written.")
 parser.add_argument('-p', '--pipeline_config', required=True, help="Path to pipeline config file.")
-parser.add_argument('--num_train_steps', required=False, default=None, type=int, help="Number of training steps (overrides pipeline).")
-parser.add_argument('--sample_1_of_n_eval_examples', required=False, default=1, type=int, help="Will sample one of every n eval input examples, where n is provided.")
+parser.add_argument('--num_train_steps', required=False, default=None, type=int,
+                    help="Number of training steps (overrides pipeline).")
+parser.add_argument('--max_checkpoints', required=False, default=None, type=int,
+                    help="Maximum checkpoints to save. Default: no limit")
+parser.add_argument('--checkpoint_steps', required=False, default=1000, type=int,
+                    help="Save checkpoint at every x steps. Default: every 1000 steps")
+parser.add_argument('--sample_1_of_n_eval_examples', required=False, default=1, type=int,
+                    help="Will sample one of every n eval input examples, where n is provided.")
 parser.add_argument('-l', '--logs', required=False, help="Path to logs directory")
 parser.add_argument('-v', '--verbose', required=False, action='store_true')
 
@@ -67,7 +73,8 @@ log_dir = args.logs if args.logs else out_dir
 
 config_proto = tf.ConfigProto()
 config_proto.gpu_options.allow_growth = True
-config = tf.estimator.RunConfig(model_dir=out_dir, session_config=config_proto)
+config = tf.estimator.RunConfig(model_dir=out_dir, session_config=config_proto,
+                                save_checkpoints_steps=args.checkpoint_steps, keep_checkpoint_max=args.max_checkpoints)
 
 pipeline_overrides = None
 latest_checkpoint = find_latest_checkpoint(log_dir, modelId)
