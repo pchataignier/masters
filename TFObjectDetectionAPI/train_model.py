@@ -73,7 +73,7 @@ log_dir = args.logs if args.logs else out_dir
 
 config_proto = tf.ConfigProto()
 config_proto.gpu_options.allow_growth = True
-config = tf.estimator.RunConfig(model_dir=out_dir, session_config=config_proto,
+config = tf.estimator.RunConfig(model_dir=out_dir, session_config=config_proto, log_step_count_steps=1,
                                 save_checkpoints_steps=args.checkpoint_steps, keep_checkpoint_max=args.max_checkpoints)
 
 pipeline_overrides = None
