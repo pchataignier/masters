@@ -8,9 +8,12 @@ TF_Model/
 
 OpenImagesDataset/*/*.jpeg
 OpenImagesDataset/*.pbtxt
+OpenImagesDataset/*train*.csv
 OpenImagesDataset/*/*.csv
 OpenImagesDataset/*/*.tfrecord*
 !OpenImagesDataset/*/*-filtered-*.csv
+
+TFObjectDetectionAPI/*/
 
 temp/
 tests/

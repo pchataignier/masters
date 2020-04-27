@@ -3,6 +3,7 @@
 
 import os
 import re
+import shutil
 import tarfile
 import urllib
 import pandas as pd
@@ -99,7 +100,12 @@ def post_process_pipeline_file(filename):
         f.truncate()
 
 def get_record_file_patten(dataset_dir, split):
-    records = glob(f"{dataset_dir}/{split}/{split}.record*")
+    records_pattern = os.path.join(dataset_dir, split, f"{split}.record*")
+    records = glob(records_pattern)
+
+    if not records:
+        print(f"No record files found in {os.path.join(dataset_dir, split)}")
+        return "placeholder.record"
 
     if len(records) == 1:
         return records[0]
@@ -114,32 +120,44 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser(description="Downloads pre-trained Tensorflow models")
-    parser.add_argument('-d', '--dataset', required=True,
-                        help="Full path to root directory of the dataset.")
+    parser.add_argument('-d', '--dataset', required=False, default="../OpenImagesDataset",
+                        help="Full path to root directory of the dataset. Defaults to '../OpenImagesDataset'")
     parser.add_argument('-m', '--models_csv', required=False, default="models.csv",
                         help="Path to csv file containing the model names on Tensorflow download website. "
                              "See https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md")
     parser.add_argument('-n', '--n_classes', required=False, default=7, type=int, help="Number of classes")
+    parser.add_argument('-b', '--batch_size', required=False, default=1, type=int, help="Batch size. Default 1")
+    parser.add_argument('--width', required=False, default=640, type=int, help="Image width. Default 640")
+    parser.add_argument('--height', required=False, default=480, type=int, help="Image height. Default 480")
     parser.add_argument('--override_only', required=False, action='store_true', help="Skip downloading the files. Used for fixing config files")
     args = parser.parse_args()
 
-    dataset_dir = args.dataset
+    dataset_dir = os.path.abspath(args.dataset)
     models_csv = args.models_csv
     n_classes = args.n_classes
+    batch_size = args.batch_size
+    width_height = (args.width, args.height)
 
     pd.set_option("display.max_colwidth", 10000)
     models = pd.read_csv(models_csv)
 
+    label_map_path = os.path.join(dataset_dir, "labelMap.pbtxt")
+
     for model_id, model_name in models.itertuples(index=False):
-        overrides = {"train_config.fine_tune_checkpoint": f"{model_id}/model.ckpt",
-                     "label_map_path": f"{dataset_dir}/labelMap.pbtxt",
+        checkpoint_path = os.path.join(model_id, "model.ckpt")
+        overrides = {"train_config.fine_tune_checkpoint": f"{checkpoint_path}",
+                     "label_map_path": f"{label_map_path}",
                      "eval_input_path": f"{get_record_file_patten(dataset_dir, 'validation')}",
                      "train_input_path": f"{get_record_file_patten(dataset_dir, 'train')}",
-                     "batch_size": 1, "train_shuffle": True,
-                     "num_classes": n_classes, "width_height":(640,480)}
+                     "batch_size": batch_size, "train_shuffle": True,
+                     "num_classes": n_classes, "width_height": width_height}
         if not args.override_only:
             download_model(model_name, model_id)
 
-        override_pipeline_configs(model_id+"/pipeline.config", overrides, model_id)
-        post_process_pipeline_file(model_id+"/pipeline.config")
+        config_file = os.path.join(model_id, "pipeline.config")
+        config_bkp = config_file + ".bkp"
+        if not os.path.isfile(config_bkp):
+            shutil.copy(config_file, config_bkp)
+        override_pipeline_configs(config_file, overrides, model_id)
+        post_process_pipeline_file(config_file)
 
