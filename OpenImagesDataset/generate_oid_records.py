@@ -7,6 +7,7 @@ import contextlib2
 import pandas as pd
 import tensorflow as tf
 
+from datetime import datetime
 from object_detection.dataset_tools import tf_record_creation_util
 from object_detection.utils import label_map_util
 
@@ -125,6 +126,13 @@ def create_label_map(label_map_path, labels):
 from object_detection.core import standard_fields
 from object_detection.utils import dataset_util
 
+def log_print(msg, logfile):
+    prefix = str(datetime.now()) + " :: "
+    msg = prefix + msg
+
+    print(msg)
+    with open(logfile, 'a') as f:
+        f.write(msg + "\n")
 
 def tf_example_from_annotations_data_frame(annotations_data_frame, label_map, encoded_image):
     """Populates a TF Example message with image annotations from a data frame.
@@ -180,11 +188,13 @@ parser.add_argument('-o', '--output_dir', required=False, default="",
                     help="Path to desired output directory. "
                          "If specified, saves files in <outdir>/[train, test, validation], "
                          "otherwise saves them to <working directory>/[train, test, validation]")
+parser.add_argument('--log', required=False, default="print.log",
+                    help="Path to log file.")
 args = parser.parse_args()
 OUT_DIR = args.output_dir
 
 # ## Settings and File Paths
-SPLITS = {"validation":100, "train":1000}
+SPLITS = {"train":1000} #"validation":100,
 LABELS_CSV = "filteredLabels.csv"
 LABEL_MAP_PATH = "labelMap.pbtxt"
 SAVE_FILTERED_CSV = True
@@ -228,6 +238,7 @@ for SPLIT, NUM_SHARDS in SPLITS.items():
 
 
     # ### Loading DataFrames
+    log_print("Loading DataFrames")
     bboxes = get_filtered_bboxes(ANNO_CSV, labels)
     urls = get_filtered_urls(URLS_CSV, bboxes)
     class_load, factors = get_class_load_and_factors(bboxes)
@@ -235,6 +246,7 @@ for SPLIT, NUM_SHARDS in SPLITS.items():
     # ### Checkpoint file
     # Saves the image bytes and errors.
     # Used for continuing without re-downloading.
+    log_print("Loading Checkpoint")
     ckpt_file = os.path.join(split_out_dir, f"{SPLIT}-download-summary-v2.csv")
     ckpt = None
     if os.path.isfile(ckpt_file):
@@ -245,48 +257,60 @@ for SPLIT, NUM_SHARDS in SPLITS.items():
 
 
     # ### Writing the Record files
-    total = len(bboxes.ImageID.unique())
-    with contextlib2.ExitStack() as tf_record_close_stack:
-        output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(tf_record_close_stack,
-                                                                                 RECORDS_FILEPATH,
-                                                                                 NUM_SHARDS)
+    try:
+        total = len(bboxes.ImageID.unique())
+        with contextlib2.ExitStack() as tf_record_close_stack:
+            output_tfrecords = tf_record_creation_util.open_sharded_output_tfrecords(tf_record_close_stack,
+                                                                                     RECORDS_FILEPATH,
+                                                                                     NUM_SHARDS)
 
-        for counter, image_data in enumerate(bboxes.groupby('ImageID')):
+            for counter, image_data in enumerate(bboxes.groupby('ImageID')):
 
-            image_id, image_annotations = image_data
-            print(f"Processing image {counter+1}/{total} at {image_id}")
+                image_id, image_annotations = image_data
+                log_print(f"Processing image {counter+1}/{total} at {image_id}")
 
-            error = False
-            error_msg = ""
-            try:
-                if image_id in ckpt.ImageID.unique():
-                    print("\tAlready seen")
-                    if ckpt[ckpt.ImageID == image_id].iloc[0].Error: continue
+                error = False
+                error_msg = ""
+                try:
+                    if image_id in ckpt.ImageID.unique():
+                        log_print("\tAlready seen")
+                        if ckpt[ckpt.ImageID == image_id].iloc[0].Error: continue
+                        else:
+                            encoded_jpg = ckpt[ckpt.ImageID == image_id].iloc[0].EncodedJpg
                     else:
-                        encoded_jpg = ckpt[ckpt.ImageID == image_id].iloc[0].EncodedJpg
-                else:
-                    url = urls[urls.ImageID == image_id].iloc[0].image_url
-                    encoded_jpg = get_encoded_image_bytes_from_url(url)
+                        url = urls[urls.ImageID == image_id].iloc[0].image_url
+                        encoded_jpg = get_encoded_image_bytes_from_url(url)
 
-                tf_example = tf_example_from_annotations_data_frame(image_annotations, label_dict, encoded_jpg)
+                    tf_example = tf_example_from_annotations_data_frame(image_annotations, label_dict, encoded_jpg)
 
-                if tf_example:
-                    if BALANCE_EXAMPLES:
-                        factor = factors[factors.ImageID == image_id].iloc[0].Factor
-                        for i in range(factor):
-                            shard_idx = (counter + i) % NUM_SHARDS
+                    if tf_example:
+                        if BALANCE_EXAMPLES:
+                            factor = factors[factors.ImageID == image_id].iloc[0].Factor
+                            for i in range(factor):
+                                shard_idx = (counter + i) % NUM_SHARDS
+                                output_tfrecords[shard_idx].write(tf_example.SerializeToString())
+                        else:
+                            shard_idx = counter % NUM_SHARDS
                             output_tfrecords[shard_idx].write(tf_example.SerializeToString())
-                    else:
-                        shard_idx = counter % NUM_SHARDS
-                        output_tfrecords[shard_idx].write(tf_example.SerializeToString())
-            except Exception as ex:
-                error = True
-                error_msg = str(ex)
-                encoded_jpg = b''
-                print(error_msg)
 
-            ckpt = ckpt.append({"ImageID":image_id, "Error":error, "ErrorMessage":error_msg, "EncodedJpg":encoded_jpg},
-                               ignore_index=True)
-            ckpt.to_csv(ckpt_file, index=False)
 
-print("Finished!")
+
+                except Exception as ex:
+                    error = True
+                    error_msg = str(ex)
+                    encoded_jpg = b''
+                    log_print(error_msg)
+
+                try:
+                    ckpt = ckpt.append({"ImageID":image_id, "Error":error, "ErrorMessage":error_msg, "EncodedJpg":encoded_jpg},
+                                       ignore_index=True)
+                    if counter % 1000 == 0 or counter == total-1:
+                        log_print("========== Saving checkpoint ==========")
+                        ckpt.to_csv(ckpt_file, index=False)
+                        log_print("========== Checkpoint saved ==========")
+                except Exception as ex:
+                    log_print(str(ex))
+    except Exception as ex:
+        log_print(str(ex))
+
+log_print("Finished!")
