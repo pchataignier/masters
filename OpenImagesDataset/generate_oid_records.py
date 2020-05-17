@@ -192,6 +192,7 @@ parser.add_argument('--log', required=False, default="print.log",
                     help="Path to log file.")
 args = parser.parse_args()
 OUT_DIR = args.output_dir
+LOG_FILE = args.log
 
 # ## Settings and File Paths
 SPLITS = {"train":1000} #"validation":100,
@@ -238,7 +239,7 @@ for SPLIT, NUM_SHARDS in SPLITS.items():
 
 
     # ### Loading DataFrames
-    log_print("Loading DataFrames")
+    log_print("Loading DataFrames", LOG_FILE)
     bboxes = get_filtered_bboxes(ANNO_CSV, labels)
     urls = get_filtered_urls(URLS_CSV, bboxes)
     class_load, factors = get_class_load_and_factors(bboxes)
@@ -246,7 +247,7 @@ for SPLIT, NUM_SHARDS in SPLITS.items():
     # ### Checkpoint file
     # Saves the image bytes and errors.
     # Used for continuing without re-downloading.
-    log_print("Loading Checkpoint")
+    log_print("Loading Checkpoint", LOG_FILE)
     ckpt_file = os.path.join(split_out_dir, f"{SPLIT}-download-summary-v2.csv")
     ckpt = None
     if os.path.isfile(ckpt_file):
@@ -267,13 +268,13 @@ for SPLIT, NUM_SHARDS in SPLITS.items():
             for counter, image_data in enumerate(bboxes.groupby('ImageID')):
 
                 image_id, image_annotations = image_data
-                log_print(f"Processing image {counter+1}/{total} at {image_id}")
+                log_print(f"Processing image {counter+1}/{total} at {image_id}", LOG_FILE)
 
                 error = False
                 error_msg = ""
                 try:
                     if image_id in ckpt.ImageID.unique():
-                        log_print("\tAlready seen")
+                        log_print("\tAlready seen", LOG_FILE)
                         if ckpt[ckpt.ImageID == image_id].iloc[0].Error: continue
                         else:
                             encoded_jpg = ckpt[ckpt.ImageID == image_id].iloc[0].EncodedJpg
@@ -299,18 +300,18 @@ for SPLIT, NUM_SHARDS in SPLITS.items():
                     error = True
                     error_msg = str(ex)
                     encoded_jpg = b''
-                    log_print(error_msg)
+                    log_print(error_msg, LOG_FILE)
 
                 try:
                     ckpt = ckpt.append({"ImageID":image_id, "Error":error, "ErrorMessage":error_msg, "EncodedJpg":encoded_jpg},
                                        ignore_index=True)
                     if counter % 1000 == 0 or counter == total-1:
-                        log_print("========== Saving checkpoint ==========")
+                        log_print("========== Saving checkpoint ==========", LOG_FILE)
                         ckpt.to_csv(ckpt_file, index=False)
-                        log_print("========== Checkpoint saved ==========")
+                        log_print("========== Checkpoint saved ==========", LOG_FILE)
                 except Exception as ex:
-                    log_print(str(ex))
+                    log_print(str(ex), LOG_FILE)
     except Exception as ex:
-        log_print(str(ex))
+        log_print(str(ex), LOG_FILE)
 
-log_print("Finished!")
+log_print("Finished!", LOG_FILE)
