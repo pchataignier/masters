@@ -1,6 +1,7 @@
 import os
 import cv2
 import math
+import uuid
 import imutils
 import argparse
 import contextlib2
@@ -167,7 +168,7 @@ def tf_example_from_annotations_data_frame(annotations_data_frame, label_map, en
       standard_fields.TfExampleFields.filename:
           dataset_util.bytes_feature('{}.jpg'.format(image_id).encode("utf-8")),
       standard_fields.TfExampleFields.source_id:
-          dataset_util.bytes_feature(image_id.encode("utf-8")),
+          dataset_util.bytes_feature(f"{image_id}__{uuid.uuid4()}".encode("utf-8")),
       standard_fields.TfExampleFields.image_encoded:
           dataset_util.bytes_feature(encoded_image),
   }
@@ -195,7 +196,7 @@ OUT_DIR = args.output_dir
 LOG_FILE = args.log
 
 # ## Settings and File Paths
-SPLITS = {"train":1000} #"validation":100,
+SPLITS = {"validation":100} #"validation":100, "train":1000
 LABELS_CSV = "filteredLabels.csv"
 LABEL_MAP_PATH = "labelMap.pbtxt"
 SAVE_FILTERED_CSV = True

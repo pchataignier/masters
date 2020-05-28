@@ -100,7 +100,7 @@ def post_process_pipeline_file(filename):
         f.truncate()
 
 def get_record_file_patten(dataset_dir, split):
-    records_pattern = os.path.join(dataset_dir, split, f"{split}.record*")
+    records_pattern = os.path.join(dataset_dir, split, f"*record*")
     records = glob(records_pattern)
 
     if not records:
