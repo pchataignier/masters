@@ -71,6 +71,7 @@ def override_pipeline_configs(config_file, overrides, out_dir=""):
     configs = config_util.get_configs_from_pipeline_file(config_file)
 
     configs['train_config'].from_detection_checkpoint = True
+    configs['eval_config'].num_examples = 25000
 
     for field, value in overrides.items():
         if field == "num_classes":
