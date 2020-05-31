@@ -182,6 +182,10 @@ def tf_example_from_annotations_data_frame(annotations_data_frame, label_map, en
     if 'IsDepiction' in filtered_data_frame.columns:
         feature_map[standard_fields.TfExampleFields.object_depiction] = dataset_util.int64_list_feature(filtered_data_frame_boxes.IsDepiction.to_numpy().astype(int))
 
+    feature_map[standard_fields.TfExampleFields.image_format] = dataset_util.bytes_feature(b'jpeg')
+    feature_map[standard_fields.TfExampleFields.image_height] = dataset_util.int64_feature(int(480))
+    feature_map[standard_fields.TfExampleFields.image_width] = dataset_util.int64_feature(int(640))
+
     return tf.train.Example(features=tf.train.Features(feature=feature_map))
 
 parser = argparse.ArgumentParser(description="Generates Tensorflow '.record' files")
