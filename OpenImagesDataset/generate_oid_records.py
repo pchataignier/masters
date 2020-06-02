@@ -183,8 +183,8 @@ def tf_example_from_annotations_data_frame(annotations_data_frame, label_map, en
         feature_map[standard_fields.TfExampleFields.object_depiction] = dataset_util.int64_list_feature(filtered_data_frame_boxes.IsDepiction.to_numpy().astype(int))
 
     feature_map[standard_fields.TfExampleFields.image_format] = dataset_util.bytes_feature(b'jpeg')
-    feature_map[standard_fields.TfExampleFields.image_height] = dataset_util.int64_feature(int(480))
-    feature_map[standard_fields.TfExampleFields.image_width] = dataset_util.int64_feature(int(640))
+    feature_map[standard_fields.TfExampleFields.height] = dataset_util.int64_feature(int(480))
+    feature_map[standard_fields.TfExampleFields.width] = dataset_util.int64_feature(int(640))
 
     return tf.train.Example(features=tf.train.Features(feature=feature_map))
 
@@ -200,7 +200,7 @@ OUT_DIR = args.output_dir
 LOG_FILE = args.log
 
 # ## Settings and File Paths
-SPLITS = {"validation":100} #"validation":100, "train":1000
+SPLITS = {"validation":100, "train":1000} #"validation":100, "train":1000
 LABELS_CSV = "filteredLabels.csv"
 LABEL_MAP_PATH = "labelMap.pbtxt"
 SAVE_FILTERED_CSV = True
@@ -310,7 +310,7 @@ for SPLIT, NUM_SHARDS in SPLITS.items():
                 try:
                     ckpt = ckpt.append({"ImageID":image_id, "Error":error, "ErrorMessage":error_msg, "EncodedJpg":encoded_jpg},
                                        ignore_index=True)
-                    if counter % 1000 == 0 or counter == total-1:
+                    if counter % 10000 == 0 or counter == total-1:
                         log_print("========== Saving checkpoint ==========", LOG_FILE)
                         ckpt.to_csv(ckpt_file, index=False)
                         log_print("========== Checkpoint saved ==========", LOG_FILE)
