@@ -11,4 +11,3 @@ imread
 SpeechRecognition
 pyttsx3
 sounddevice
-ipywebrtc
