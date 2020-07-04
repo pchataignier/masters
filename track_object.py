@@ -9,6 +9,7 @@ import tensorflow as tf
 from chirp import Chirp
 from beeper import Beeper
 from speaker import Speaker
+from datetime import datetime
 from imutils.video import VideoStream
 from object_detection.utils import label_map_util
 from object_detection.utils import visualization_utils as vis_util
@@ -16,7 +17,7 @@ from object_detection.utils import visualization_utils as vis_util
 import sounddevice as sd
 from scipy.io.wavfile import read as read_wav
 
-GROUPINGS = {"Mobile phone":"phone", "Corded phone":"phone", "Telephone":"phone", "Remote control":"remote"}
+GROUPINGS = {"Mobile phone":"phone", "Corded phone":"phone", "Telephone":"phone", "Remote control":"remote", "Coffee cup": "Mug"}
 
 
 ## Auxiliary Functions
@@ -52,7 +53,12 @@ parser.add_argument("-m", "--model", required=True, help="Path to the '.pb' infe
 parser.add_argument("-t", "--target", required=True, help="Object to track")
 parser.add_argument("-v", "--visualize", action="store_true", help="Whether or not to display the captured video and inference")
 parser.add_argument("-c", "--camera", required=False, type=int, default=0, help="Camera number")
-parser.add_argument("-o", "--output_mode", required=True, choices=["speaker", "beeper", "chirp"], help="Output mode: [speaker, beeper, chirps]")
+parser.add_argument("-o", "--output_mode", required=True, choices=["speaker", "beeper", "chirp"], help="Output mode: [speaker, beeper, chirp]")
+parser.add_argument("--fps", type=int, default=2, help="FPS of output video")
+parser.add_argument("--codec", type=str, default="XVID", help="Codec of output video. Default: XVID")
+parser.add_argument("--record", type=str, required=False, default="", help="Path to output where experiment recording will be saved. "
+                                                                           "Expects either a directory or .avi file. "
+                                                                           "For other extensions codec may have to be changed as well")
 args = parser.parse_args()
 
 LABEL_MAP = args.label_map
@@ -61,6 +67,13 @@ TARGET_CLASS = args.target
 SHOULD_VISUALIZE = args.visualize
 CAMERA_ID = args.camera
 OUTPUT_MODE = args.output_mode
+
+CODEC = args.codec
+FPS = args.fps
+RECORD = args.record
+if RECORD and os.path.isdir(RECORD):
+    filename = datetime.now().strftime('experiment_%Y%m%d_%H%M%S.avi')
+    RECORD = os.path.join(RECORD, filename)
 
 ## Define output mode
 guide = None
@@ -90,6 +103,10 @@ print(f"Loading graph: {stop-start}")
 camera = VideoStream(CAMERA_ID).start()
 time.sleep(1.0)
 
+## Recording prep
+fourcc = cv2.VideoWriter_fourcc(*CODEC)
+video_writer = None
+
 ## Main inference loop
 start = time.perf_counter()
 with detection_graph.as_default():
@@ -102,12 +119,21 @@ with detection_graph.as_default():
         i.start()
         try:
             start = time.perf_counter()
+            found_once_before = False
+            first_frame = True
+            fps_start = time.perf_counter()
+            first_frame_delay = 0
             while flag==1:
                 frame = camera.read()
-                frame_size = frame.shape
+                #frame_size = frame.shape
 
+                if RECORD and not video_writer:
+                    (frame_h, frame_w) = frame.shape[:2]
+                    video_writer = cv2.VideoWriter(RECORD, fourcc, FPS, (frame_w, frame_h), True)
+
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # Convert to RGB
                 # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
-                image_np_expanded = np.expand_dims(frame, axis=0)
+                image_np_expanded = np.expand_dims(frame_rgb, axis=0)
 
                 # Get input and output tensors
                 image_tensor = detection_graph.get_tensor_by_name('image_tensor:0')
@@ -149,31 +175,51 @@ with detection_graph.as_default():
 
                 # If object not in sight, play error
                 if not target:
-                    play_error()
+                    if found_once_before:
+                        play_ready()
+                    else:
+                        play_error()
                     time.sleep(0.1)
                 else:
+                    found_once_before = True
                     guide.give_directions(target, centre)
+
+                # Write detections to frame
+                annotated_frame = frame
+                vis_util.visualize_boxes_and_labels_on_image_array(
+                    annotated_frame,
+                    boxes,
+                    classes,
+                    scores,
+                    category_index,
+                    use_normalized_coordinates=True,
+                    line_thickness=4, min_score_thresh= 0.5 if SHOULD_VISUALIZE else 0.1)  # , min_score_thresh=.1
+
+                if first_frame:
+                    fps_stop = time.perf_counter()
+                    first_frame_delay = fps_stop - fps_start
+                    #print(f"Seconds on first frame: {first_frame_delay}")
+                    first_frame = False
+                elif video_writer:
+                    video_writer.write(annotated_frame)
 
                 if SHOULD_VISUALIZE:
                     # Visualization of the results of a detection.
-                    vis_util.visualize_boxes_and_labels_on_image_array(
-                        frame,
-                        boxes,
-                        classes,
-                        scores,
-                        category_index,
-                        use_normalized_coordinates=True,
-                        line_thickness=8) #, min_score_thresh=.1
-
-                    cv2.imshow('object detection', frame)
+                    cv2.imshow('object detection', annotated_frame)
                     if cv2.waitKey(25) & 0xFF == ord('q'):
                         # cv2.destroyAllWindows()
                         break
 
                 #time.sleep(0.1)
             stop = time.perf_counter()
-            print(f"Guidance Loop: {stop - start}")
+            guidance_time = stop - start
+            print(f"Guidance Loop: {guidance_time}\n"
+                  f"First Frame Processing: {first_frame_delay}\n"
+                  f"Discounted Guidance: {guidance_time - first_frame_delay}")
         finally:
+            camera.stop()
             if SHOULD_VISUALIZE:
                 cv2.destroyAllWindows()
-            camera.stop()
+
+            if video_writer:
+                video_writer.release()
