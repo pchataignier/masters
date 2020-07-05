@@ -271,7 +271,9 @@ with detection_graph.as_default():
             guidance_time = stop - start
             print(f"Guidance Loop: {guidance_time}\n"
                   f"First Frame Processing: {first_frame_delay}\n"
-                  f"Discounted Guidance: {guidance_time - first_frame_delay}")
+                  f"Discounted Guidance: {guidance_time - first_frame_delay}\n"
+                  f"Logs saved in: {EXPERIMENT_LOG}")
+
         finally:
             camera.stop()
             if SHOULD_VISUALIZE:
