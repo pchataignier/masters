@@ -2,6 +2,7 @@ import os
 import re
 import cv2
 import time
+import json
 import argparse
 import threading
 import numpy as np
@@ -46,6 +47,11 @@ def get_input():
     # thread doesn't continue until key is pressed
     flag=False
 
+def log_to_file(to_log, log_file):
+    to_log = json.dumps(to_log)
+    with open(log_file, 'a') as f:
+        f.write(f"{to_log}\n")
+
 ## Construct the argument parse and parse the arguments
 parser = argparse.ArgumentParser()
 parser.add_argument("-l", "--label_map", required=True, help="Path to the '.pbtxt' Label Map file")
@@ -56,9 +62,8 @@ parser.add_argument("-c", "--camera", required=False, type=int, default=0, help=
 parser.add_argument("-o", "--output_mode", required=True, choices=["speaker", "beeper", "chirp"], help="Output mode: [speaker, beeper, chirp]")
 parser.add_argument("--fps", type=int, default=2, help="FPS of output video")
 parser.add_argument("--codec", type=str, default="XVID", help="Codec of output video. Default: XVID")
-parser.add_argument("--record", type=str, required=False, default="", help="Path to output where experiment recording will be saved. "
-                                                                           "Expects either a directory or .avi file. "
-                                                                           "For other extensions codec may have to be changed as well")
+parser.add_argument("--logs", type=str, default="./Experiments", help="Path to Log directory. Default: ./Experiments")
+parser.add_argument("--record", action="store_true", help="Whether or not to record experiment")
 args = parser.parse_args()
 
 LABEL_MAP = args.label_map
@@ -67,22 +72,39 @@ TARGET_CLASS = args.target
 SHOULD_VISUALIZE = args.visualize
 CAMERA_ID = args.camera
 OUTPUT_MODE = args.output_mode
+LOGS = args.logs
 
 CODEC = args.codec
 FPS = args.fps
 RECORD = args.record
-if RECORD and os.path.isdir(RECORD):
-    filename = datetime.now().strftime('experiment_%Y%m%d_%H%M%S.avi')
-    RECORD = os.path.join(RECORD, filename)
+
+if not os.path.exists(LOGS):
+    os.mkdir(LOGS)
+EXPERIMENT_ID = datetime.now().strftime('experiment_%Y%m%d_%H%M%S')
+EXPERIMENT_LOG = os.path.join(LOGS, EXPERIMENT_ID)
+os.mkdir(EXPERIMENT_LOG)
+
+LOG_FILE = os.path.join(EXPERIMENT_LOG, EXPERIMENT_ID + ".log")
+
+VIDEO_FILE = None
+if RECORD:
+    filename = EXPERIMENT_ID + ".avi"
+    VIDEO_FILE = os.path.join(EXPERIMENT_LOG, filename)
 
 ## Define output mode
 guide = None
+guide_tolerance = 0.15
+guide_delay = 0
 if OUTPUT_MODE == "speaker":
-    guide = Speaker(tolerance=0.15, delay=0)
+    guide = Speaker(tolerance=guide_tolerance, delay=guide_delay)
 elif OUTPUT_MODE == "beeper":
-    guide = Beeper(tolerance=0.15, delay=0)
+    guide = Beeper(tolerance=guide_tolerance, delay=guide_delay)
 elif OUTPUT_MODE == "chirp":
-    guide = Chirp(tolerance=0.15, delay=0)
+    guide = Chirp(tolerance=guide_tolerance, delay=guide_delay)
+
+experiment_config = {"label_map":LABEL_MAP, "model_ckpt":PATH_TO_CKPT, "target_class":TARGET_CLASS,
+                     "output_mode":OUTPUT_MODE, "guide_tolerance":guide_tolerance, "guide_delay":guide_delay}
+log_to_file(experiment_config, LOG_FILE)
 
 category_index = label_map_util.create_category_index_from_labelmap(LABEL_MAP, use_display_name=True)
 
@@ -124,12 +146,14 @@ with detection_graph.as_default():
             fps_start = time.perf_counter()
             first_frame_delay = 0
             while flag==1:
+                frame_id = datetime.now().strftime('%Y%m%d_%H%M%S_%f.jpg')
+                results_dict = {"frame_id":frame_id}
                 frame = camera.read()
                 #frame_size = frame.shape
 
-                if RECORD and not video_writer:
-                    (frame_h, frame_w) = frame.shape[:2]
-                    video_writer = cv2.VideoWriter(RECORD, fourcc, FPS, (frame_w, frame_h), True)
+                # if RECORD and not video_writer:
+                #     (frame_h, frame_w) = frame.shape[:2]
+                #     video_writer = cv2.VideoWriter(VIDEO_FILE, fourcc, FPS, (frame_w, frame_h), True)
 
                 frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # Convert to RGB
                 # Expand dimensions since the model expects images to have shape: [1, None, None, 3]
@@ -152,6 +176,11 @@ with detection_graph.as_default():
                 scores = np.squeeze(scores)
                 num_detections = int(num_detections)
 
+                results_dict["boxes"] = boxes[:num_detections].tolist()
+                results_dict["classes"] = classes[:num_detections].tolist()
+                results_dict["scores"] = scores[:num_detections].tolist()
+                results_dict["num_detections"] = num_detections
+
 
                 # Get best/closer detections when multiple instances
                 isHand = False
@@ -160,6 +189,8 @@ with detection_graph.as_default():
 
                 lastArea = 0
                 target = []
+                target_indx = None
+                centre_inx = None
                 for i in range(num_detections):
                     pred_class = category_index[classes[i]]["name"]
                     pred_class = remap_classification_name(pred_class)
@@ -169,9 +200,17 @@ with detection_graph.as_default():
                         if area > lastArea:
                             lastArea = area
                             target = get_box_centre(box)
+                            target_indx = i
                     elif pred_class == "Human hand" and scores[i]>=0.5:
                         centre = get_box_centre(box)
+                        centre_inx = i
                         isHand = True
+
+                results_dict["target"] = target
+                results_dict["target_indx"] = target_indx
+                results_dict["centre"] = centre
+                results_dict["centre_inx"] = centre_inx
+                results_dict["isHand"] = isHand
 
                 # If object not in sight, play error
                 if not target:
@@ -184,27 +223,44 @@ with detection_graph.as_default():
                     found_once_before = True
                     guide.give_directions(target, centre)
 
-                # Write detections to frame
-                annotated_frame = frame
-                vis_util.visualize_boxes_and_labels_on_image_array(
-                    annotated_frame,
-                    boxes,
-                    classes,
-                    scores,
-                    category_index,
-                    use_normalized_coordinates=True,
-                    line_thickness=4, min_score_thresh= 0.5 if SHOULD_VISUALIZE else 0.1)  # , min_score_thresh=.1
+                results_dict["found_once_before"] = found_once_before
+                if RECORD:
+                    frame_file = os.path.join(EXPERIMENT_LOG, frame_id)
+                    cv2.imwrite(frame_file, frame)
+                    # to_log = str(results_dict)
+                    log_to_file(results_dict, LOG_FILE)
 
+                # Write detections to frame
                 if first_frame:
                     fps_stop = time.perf_counter()
                     first_frame_delay = fps_stop - fps_start
                     #print(f"Seconds on first frame: {first_frame_delay}")
                     first_frame = False
                 elif video_writer:
+                    annotated_frame = frame
+                    vis_util.visualize_boxes_and_labels_on_image_array(
+                        annotated_frame,
+                        boxes,
+                        classes,
+                        scores,
+                        category_index,
+                        use_normalized_coordinates=True,
+                        line_thickness=4, min_score_thresh=0.1)  # , min_score_thresh=.1
                     video_writer.write(annotated_frame)
 
                 if SHOULD_VISUALIZE:
                     # Visualization of the results of a detection.
+
+                    annotated_frame = frame
+                    vis_util.visualize_boxes_and_labels_on_image_array(
+                        annotated_frame,
+                        boxes,
+                        classes,
+                        scores,
+                        category_index,
+                        use_normalized_coordinates=True,
+                        line_thickness=4, min_score_thresh=0.5)  # , min_score_thresh=.1
+
                     cv2.imshow('object detection', annotated_frame)
                     if cv2.waitKey(25) & 0xFF == ord('q'):
                         # cv2.destroyAllWindows()
