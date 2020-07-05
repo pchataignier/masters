@@ -5,6 +5,7 @@ logs/
 results/
 Movidius/
 TF_Model/
+Experiments/
 
 OpenImagesDataset/*/*.jpeg
 OpenImagesDataset/*/*.jpg
@@ -18,7 +19,7 @@ TFObjectDetectionAPI/*/
 
 temp/
 tests/
-test*.py
+test*.*
 quickTrain
 trainedModels/
 
